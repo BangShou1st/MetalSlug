@@ -1,0 +1,19 @@
+﻿# Maven
+target/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Eclipse
+.classpath
+.project
+.settings/
+
+# Java
+*.class
+
+# 系统文件
+.DS_Store
+Thumbs.db
