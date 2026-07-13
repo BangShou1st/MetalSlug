@@ -1,0 +1,35 @@
+### Build Output ###
+target/
+out/
+build/
+dist/
+*.class
+
+### IDE ###
+.idea/
+*.iws
+*.iml
+*.ipr
+.classpath
+.project
+.settings
+.vscode/
+*.swp
+*.swo
+
+
+### Resources ###
+src/main/resources/img/
+src/main/resources/audio/
+
+### System ###
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.md
+
+### Gradle/Maven ###
+.gradle/
+.mvn/
+!**/maven-wrapper.jar
