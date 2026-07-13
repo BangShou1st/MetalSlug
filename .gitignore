@@ -1,35 +1,19 @@
-### Build Output ###
+﻿# Maven
 target/
-out/
-build/
-dist/
-*.class
 
-### IDE ###
+# IntelliJ IDEA
 .idea/
-*.iws
 *.iml
-*.ipr
+out/
+
+# Eclipse
 .classpath
 .project
-.settings
-.vscode/
-*.swp
-*.swo
+.settings/
 
+# Java
+*.class
 
-### Resources ###
-src/main/resources/img/
-src/main/resources/audio/
-
-### System ###
+# 系统文件
 .DS_Store
 Thumbs.db
-*.log
-*.tmp
-*.md
-
-### Gradle/Maven ###
-.gradle/
-.mvn/
-!**/maven-wrapper.jar

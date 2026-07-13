@@ -1,6 +1,0 @@
-type,x,y,patrolMinX,patrolMaxX
-rifleman,700,430,620,850
-knife,1100,430,1000,1250
-bazooka,1600,420,1500,1750
-hostage,2200,420,2200,2200
-boss1,5000,390,5000,5000
