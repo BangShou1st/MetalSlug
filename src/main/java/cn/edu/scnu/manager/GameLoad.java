@@ -3,7 +3,6 @@ package cn.edu.scnu.manager;
 import cn.edu.scnu.element.ElementObj;
 
 import javax.swing.*;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -24,6 +23,10 @@ public class GameLoad {
     public static Map<String,List<ImageIcon>> imgMaps=new HashMap<>();
     //全局配置
     private static Properties gamePro=new Properties();
+    //图片是否已经加载
+    private static boolean imgLoaded=false;
+    //对象名称和类的对应关系
+    private static Map<String,Class<?>> objMap=new HashMap<>();
 
 
     /**
@@ -67,18 +70,22 @@ public class GameLoad {
      * 加载全部图片
      */
     public static void loadImg() {
+        if(imgLoaded) {
+            return;
+        }
         Properties imgPro=loadPro("ImageData.properties");
 
         for(String key:imgPro.stringPropertyNames()) {
             String[] data=imgPro.getProperty(key).split(",");
-
-            //单张图片
-            if(data.length==1) {
-                imgMap.put(key,loadIcon(data[0]));
-            }else { //图片序列
-                imgMaps.put(key,loadImages(data[0], Integer.parseInt(data[1])));
+            String path=data[0].trim();
+            if(data.length==1) { //单张图片
+                imgMap.put(key,loadIcon(path));
+            }else {
+                int count=Integer.parseInt(data[1].trim());
+                imgMaps.put(key,loadImages(path,count));
             }
         }
+        imgLoaded=true;
     }
 
     //加载单张图片
@@ -114,95 +121,37 @@ public class GameLoad {
         return imgMaps.get(key);
     }
 
+    //读取对象配置
+    public static void loadObj() {
+        if(!objMap.isEmpty()) {
+            return;
+        }
+        Properties objPro=loadPro("obj.properties");
+        for(String key:objPro.stringPropertyNames()) {
+            try {
+                String className=objPro.getProperty(key);
+                objMap.put(key,Class.forName(className));
+            }catch (ClassNotFoundException e) {
+                throw new RuntimeException(key+"对应的类不存在");
+            }
+        }
+    }
 
-//    //用户读取文件的类
-//    private static Properties pro=new Properties();
-//    /**
-//     * 说明 传入地图id有加载方法依据文件规则自动产生地图文件名称，加载文件
-//     * @param mapId  文件编号，文件id
-//     */
-//    public static void MapLoad(int mapId) {
-//        String mapName="cn/edu/scnu/text/"+mapId+".map"; //文件路径
-//        //使用io流来获取文件对象 得到类加载器
-//        ClassLoader classLoader =  GameLoad.class.getClassLoader();
-//        InputStream maps = classLoader.getResourceAsStream(mapName);
-//        System.out.println(maps);
-//        if(null==maps){
-//            System.out.println("配置文件处理异常，请重新安装");
-//            return;
-//        }
-//
-//        try{
-//            pro.clear();
-//            pro.load(maps);
-//            //可以直接动态的获取所有的key，有key就可以获取value
-//            Enumeration<?> names = pro.propertyNames();
-//            while (names.hasMoreElements()) { //获取是无序的
-//                String key = names.nextElement().toString();
-//                //自动的创建和加载地图
-//                String[] arrs=pro.getProperty(key).split(";");
-//                for(int i=0;i<arrs.length;i++){
-//                    ElementObj element = new MapObj().createElement(key+","+arrs[i]);
-//                    em.addElement(element,GameElement.MAPS);
-//                }
-//            }
-//
-//        }catch (Exception e){}
-//    }
-//
-//    /**
-//     * 加载玩家
-//     */
-//    public static void loadPlay() {
-//        loadObj();
-//        String playStr="500,500,player1_up"; //不规范的
-//        ElementObj obj=getObj("play");
-//        ElementObj play = obj.createElement(playStr);
-//        //ElementObj play = new Play().createElement(playStr);
-//        //解耦，降低代码和代码之间的耦合度  可以直接通过接口或者是抽象父类就可以获取到实体对象
-//
-//        em.addElement(play,GameElement.PLAY);
-//    }
-//
-//    public static ElementObj getObj(String str){
-//        try {
-//            Class<?> class1 = objMap.get(str);
-//            Object newInstance = class1.newInstance();
-//            if(newInstance instanceof ElementObj){
-//                return (ElementObj)newInstance; //这个对象就和new Play()等价
-//                //新建立了一个叫GamePlay的类
-//            }
-//        } catch (InstantiationException | IllegalAccessException e) {
-//            throw new RuntimeException(e);
-//        }
-//        return null;
-//    }
-//
-//    /**
-//     * 扩展：使用配置文件，来实例化对象  通过固定的key(字符串来实例化)
-//     */
-//    private  static Map<String, Class<?>> objMap=new HashMap<>();
-//    public static void loadObj() {
-//        String texturl="cn/edu/scnu/text/obj.pro";
-//        ClassLoader classLoader =  GameLoad.class.getClassLoader();
-//        InputStream texts = classLoader.getResourceAsStream(texturl);
-//        pro.clear();
-//        try{
-//            pro.load(texts);
-//            Set<Object> set = pro.keySet();
-//            for (Object o : set) {
-//                String classUrl=pro.getProperty(o.toString());
-//                //使用反射的方式直接将类进行获取
-//                Class<?> forName = Class.forName(classUrl);
-//                objMap.put(o.toString(),forName);
-//            }
-//        }catch (IOException | ClassNotFoundException e) {
-//            throw new RuntimeException(e);
-//        }
-//    }
-//
-//    /*
-//    public static void main(String[] args) throws IOException {
-//        MapLoad(10);
-//    }*/
+    //根据配置创建对象
+    public static ElementObj getObj(String key) {
+        loadObj();
+        try {
+            Class<?> clazz=objMap.get(key);
+            return (ElementObj)clazz.getDeclaredConstructor().newInstance();
+        }catch (Exception e) {
+            throw new RuntimeException(key+"对象创建失败");
+        }
+    }
+
+    //加载玩家
+    public static void loadPlay(String playStr) {
+        ElementObj obj=getObj("play");
+        ElementObj play=obj.createElement(playStr);
+        em.addElement(play,GameElement.PLAY);
+    }
 }

@@ -49,20 +49,25 @@ public class GameJFrame extends JFrame {
      * 启动方法
      */
     public void start() {
-        if(jPanel!=null){
+        if(jPanel!=null) {
             this.add(jPanel);
         }
-        if(keyListener!=null){
+        if(keyListener!=null) {
             this.addKeyListener(keyListener);
         }
-        if(thread!=null){
-            thread.start();//启动线程
+        if(mouseListener!=null) {
+            this.addMouseListener(mouseListener);
         }
-        this.setVisible(true);//显示界面
-        //界面的刷新
-        //如果jp是runnable的子类实体对象
-        if(this.jPanel instanceof Runnable){
-            new Thread((Runnable)this.jPanel).start();
+        if(mouseMotionListener!=null) {
+            this.addMouseMotionListener(mouseMotionListener);
+        }
+        this.setVisible(true);
+        this.requestFocusInWindow();
+        if(thread!=null) {
+            thread.start();
+        }
+        if(jPanel instanceof Runnable) {
+            new Thread((Runnable)jPanel).start();
         }
     }
 

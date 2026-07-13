@@ -12,12 +12,14 @@ public class Camera {
 
     public void follow(int playerX,int playerW) {
         int width=GameLoad.getInt("window.width");
-        x=playerX+playerW/2-width/4; //玩家中心点对应窗口左侧四分之一的位置
+        //玩家中心点对应窗口左侧四分之一的位置
+        x=playerX+playerW/2-width/4;
+        int maxX=Math.max(0,worldWidth-width);
         if(x<0) {
             x=0;
         }
-        if(x>worldWidth-width) {
-            x=worldWidth-width;
+        if(x>maxX) {
+            x=maxX;
         }
     }
 

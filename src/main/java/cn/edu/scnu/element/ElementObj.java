@@ -17,8 +17,6 @@ public abstract class ElementObj {
     private int h;
     private ImageIcon icon;
     private boolean live = true; //生存状态 true 代表存在，false代表死亡
-                                    //可以采用枚举值来定义这个(生存，死亡，隐身，无敌)
-    //注明:当重新定义一个用于判定状态的变量，需要思考:1.初始化  2.值的改变  3.值的判定
 
     //动画播放数据，每个元素都有自己独立的播放进度
     private int imageIndex=0;
@@ -86,6 +84,15 @@ public abstract class ElementObj {
     protected void playAnimation(String key,long gameTime,int interval,boolean loop) {
 
         List<ImageIcon> images= GameLoad.getImages(key);
+
+        if(images==null || images.isEmpty()) {
+            throw new RuntimeException("动画不存在："+key);
+        }
+
+        if(interval<1) {
+            interval=1;
+        }
+
         //切换了动画，重新从第一帧播放
         if(!key.equals(imageKey)) {
             imageKey=key;
@@ -147,9 +154,6 @@ public abstract class ElementObj {
         return this.getRectangle().intersects(obj.getRectangle());
     }
 
-    /**
-     * 只要是 VO 类就要为属性生成 get 和 set 方法
-     */
     public int getX() {
         return x;
     }
@@ -196,5 +200,14 @@ public abstract class ElementObj {
 
     public void setLive(boolean live) {
         this.live = live;
+    }
+
+    //受到伤害，需要生命值的子类重写
+    public void hurt(int damage) {
+    }
+
+    //获取攻击力，没有攻击力的元素默认为0
+    public int getAttack() {
+        return 0;
     }
 }

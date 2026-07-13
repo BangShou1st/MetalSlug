@@ -21,20 +21,22 @@ public class GameThread extends Thread {
         em = ElementManager.getManager();
     }
 
+    private volatile boolean running=true; //整个游戏是否运行
+    private volatile boolean levelRunning=true; //当前关卡是否运行
+    private volatile boolean paused=false; //是否暂停
+
     @Override
     public void run() { //游戏的run方法   主线程
-        while(true) { //true可以变为控制关卡结束等的变量,这里特别注意
-            //游戏开始前  读进度条，加载游戏资源（场景资源）
-            gameLoad();
-            //游戏进行时  游戏过程中
-            gameRun();
-            //游戏场景结束    游戏资源回收（场景资源）
-            gameOver();
-
+        GameLoad.loadImg(); //公共图片只加载一次
+        while(running) {
+            levelRunning=true;
+            gameLoad(); //加载当前关卡
+            gameRun();  //运行当前关卡
+            gameOver(); //清理当前关卡
             try {
                 Thread.sleep(10);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
+            }catch (InterruptedException e) {
+                return;
             }
         }
     }
@@ -43,35 +45,45 @@ public class GameThread extends Thread {
      * 游戏的加载
      */
     private void gameLoad() {
-        GameLoad.loadImg(); //加载图片
-        //GameLoad.MapLoad(5);  //可以变为变量，每一关重新加载 加载地图
-        //加载主角
-        //GameLoad.loadPlay();
-        //加载敌人NPC
-        //全部加载完成，游戏启动
+
     }
 
     /**
      * @说明 游戏进行时
-     * @任务说明 游戏过程中需要做的事情:1.自动化玩家的移动，碰撞，死亡
-     *                            2.新元素的增加(NPC死亡后出现道具)
-     *                            3.暂停等等
      */
     private void gameRun() {
         long gameTime=0L;
-        while(true) { //true可以变为控制关卡结束等的变量,这里特别注意
-            Map<GameElement, List<ElementObj>> all=em.getGameElements();
+        int sleep=GameLoad.getInt("game.logicInterval");
+
+        while(running && levelRunning) {
+            if(paused) { //暂停时不更新游戏对象
+                try {Thread.sleep(sleep);
+                }catch (InterruptedException e) {
+                    return;
+                }
+                continue;
+            }
+
+            Map<GameElement,List<ElementObj>> all= em.getGameElements();
             List<ElementObj> enemys=em.getElementByKey(GameElement.ENEMY);
-            List<ElementObj> files=em.getElementByKey(GameElement.PLAYFILE);
+            List<ElementObj> bosses=em.getElementByKey(GameElement.BOSS);
+            List<ElementObj> plays=em.getElementByKey(GameElement.PLAY);
+            List<ElementObj> playFiles=em.getElementByKey(GameElement.PLAYFILE);
+            List<ElementObj> enemyFiles=em.getElementByKey(GameElement.ENEMYFILE);
 
-            moveAndUpdate(all,gameTime); //游戏元素自动化方法
+            moveAndUpdate(all,gameTime);
 
-            ElementPk(enemys,files);
+            elementPk(enemys,playFiles);   //玩家子弹攻击敌人
+            elementPk(bosses,playFiles);   //玩家子弹攻击Boss
+            elementPk(plays,enemyFiles);   //敌方子弹攻击玩家
 
-            gameTime++;//唯一的时间控制
+            gameTime++;
+
             try {
-                Thread.sleep(GameLoad.getInt("game.logicInterval"));
-            } catch (InterruptedException e) {}
+                Thread.sleep(sleep);
+            }catch (InterruptedException e) {
+                return;
+            }
         }
     }
 
@@ -95,16 +107,19 @@ public class GameThread extends Thread {
         }
     }
 
-    private void ElementPk(List<ElementObj> listA, List<ElementObj> listB) {
-        for(int i=0;i<listA.size();i++){
+    private void elementPk(List<ElementObj> listA,List<ElementObj> listB) {
+        for(int i=0;i<listA.size();i++) {
             ElementObj a=listA.get(i);
-            for(int j=0;j<listB.size();j++){
+            if(!a.isLive()) {
+                continue;
+            }
+            for(int j=0;j<listB.size();j++) {
                 ElementObj b=listB.get(j);
-                if(a.pk(b)){
-                    //问题:如果是boos，那么也一枪一个吗????
-                    //将setLive(false)变为一个受攻击方法，还可以传入另外一个对象的攻击力
-                    //当受攻击方法里执行时，如果血量减为0再进行设置生存为false
-                    a.setLive(false);
+                if(!b.isLive()) {
+                    continue;
+                }
+                if(a.pk(b)) {
+                    a.hurt(b.getAttack());
                     b.setLive(false);
                     break;
                 }
@@ -112,15 +127,35 @@ public class GameThread extends Thread {
         }
     }
 
-    public void ElementPk() {
-
-
-
-    }
-
     /**
      * 游戏切换关卡
      */
     private void gameOver() {
+    }
+
+    //暂停游戏
+    public void pauseGame() {
+        paused=true;
+    }
+
+    //继续游戏
+    public void continueGame() {
+        paused=false;
+    }
+
+    //结束当前关卡
+    public void finishLevel() {
+        levelRunning=false;
+    }
+
+    //结束整个游戏
+    public void stopGame() {
+        running=false;
+        levelRunning=false;
+        interrupt();
+    }
+
+    public boolean isPaused() {
+        return paused;
     }
 }
