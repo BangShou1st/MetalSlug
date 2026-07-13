@@ -55,11 +55,11 @@ public class GameJFrame extends JFrame {
         if(keyListener!=null) {
             this.addKeyListener(keyListener);
         }
-        if(mouseListener!=null) {
-            this.addMouseListener(mouseListener);
+        if(mouseListener!=null && jPanel!=null) {
+            jPanel.addMouseListener(mouseListener);
         }
-        if(mouseMotionListener!=null) {
-            this.addMouseMotionListener(mouseMotionListener);
+        if(mouseMotionListener!=null && jPanel!=null) {
+            jPanel.addMouseMotionListener(mouseMotionListener);
         }
         this.setVisible(true);
         this.requestFocusInWindow();
