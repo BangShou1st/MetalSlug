@@ -1,55 +1,146 @@
 package cn.edu.scnu.show;
 
-import cn.edu.scnu.element.ElementObj;
-import cn.edu.scnu.manager.ElementManager;
-import cn.edu.scnu.manager.GameElement;
+import cn.edu.scnu.controller.GameThread;
+import cn.edu.scnu.manager.Camera;
 import cn.edu.scnu.manager.GameLoad;
+import cn.edu.scnu.show.GameRenderer.MenuButton;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.Map;
-import java.util.List;
+import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 
 /**
  * @说明 游戏的主要面板
- * @功能说明 主要进行元素的显示，同时进行界面的刷新(多线程)
- *
- * @多线程刷新 1.本类实现线程接口
- *           2.本类中定义一个内部类来实现
+ * @功能说明 委托画面绘制，处理鼠标输入并按配置间隔刷新
  */
+public class GameMainJPanel extends JPanel
+        implements Runnable,MouseListener,MouseMotionListener {
+    private final GameRenderer renderer=new GameRenderer(); //集中处理所有游戏画面的绘制
+    private GameThread gameThread; //处理界面操作和控制重绘生命周期的游戏线程
+    private MenuButton hoveredButton=MenuButton.NONE; //当前鼠标悬停的按钮
 
-public class GameMainJPanel extends JPanel implements Runnable {
-    //联动管理器
-    private ElementManager em;
-
+    //创建负责刷新和输入的游戏面板
     public GameMainJPanel() {
-        init();
-    }
-    public void init() {
-        em=ElementManager.getManager();//得到元素管理器对象
     }
 
-    /**
-     * paint方法是进行绘画元素
-     * 绘画时是有固定的顺序，先绘画的图片会在底层，后绘画的图片会覆盖先绘画的
-     * 约定:本方法只执行一次，想实时刷新需要使用多线程
-     */
+    //注入与游戏线程共用的摄像机
+    public void setCamera(Camera camera) {
+        renderer.setCamera(camera);
+    }
+
+    //注入绘制和界面操作使用的游戏线程
+    public void setGameThread(GameThread gameThread) {
+        this.gameThread=gameThread;
+        renderer.setGameThread(gameThread);
+    }
+
+    //将当前面板尺寸和悬停状态交给绘制器
     @Override
     public void paint(Graphics g) {
         super.paint(g);
-        Map<GameElement,List<ElementObj>> all=em.getGameElements();
-        for(GameElement ge:GameElement.values()){ //GameElement.values();返回值是一个数组，数组的顺序就是定义枚举的顺序
-            List<ElementObj> list=all.get(ge);
-            for(ElementObj obj:list){
-                obj.showElement(g);//调用每个类的自己的show方法完成自己的显示
-            }
+        renderer.draw((Graphics2D)g,getWidth(),getHeight(),hoveredButton);
+    }
+
+    //处理界面按钮的鼠标左键点击
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        if(!SwingUtilities.isLeftMouseButton(e)) {
+            return;
+        }
+
+        MenuButton button=renderer.findButton(
+                e.getX(),e.getY(),getWidth(),getHeight());
+        switch(button) {
+            case START_GAME:
+                gameThread.openLevelSelect();
+                break;
+            case CONTROLS:
+                gameThread.openControls();
+                break;
+            case EXIT_GAME:
+                gameThread.stopGame();
+                break;
+            case LEVEL_ONE:
+                gameThread.selectLevel(1);
+                break;
+            case LEVEL_TWO:
+                gameThread.selectLevel(2);
+                break;
+            case BACK:
+                gameThread.backToMainMenu();
+                break;
+            case SETTINGS:
+                gameThread.openSettings();
+                break;
+            case RETURN_GAME:
+                gameThread.returnToGame();
+                break;
+            case HOME:
+                gameThread.returnToMainMenu();
+                break;
+            default:
+                return;
+        }
+
+        resetMenuHover();
+    }
+
+    //更新按钮悬停效果和鼠标光标
+    @Override
+    public void mouseMoved(MouseEvent e) {
+        MenuButton next=renderer.findButton(
+                e.getX(),e.getY(),getWidth(),getHeight());
+        if(next!=hoveredButton) {
+            hoveredButton=next;
+            repaint();
+        }
+        if(next!=MenuButton.NONE) {
+            setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        }else {
+            setCursor(Cursor.getDefaultCursor());
         }
     }
 
+    //清除按钮悬停状态并恢复默认光标
+    private void resetMenuHover() {
+        hoveredButton=MenuButton.NONE;
+        setCursor(Cursor.getDefaultCursor());
+        repaint();
+    }
+
+    //鼠标离开面板时清除按钮悬停效果
+    @Override
+    public void mouseExited(MouseEvent e) {
+        resetMenuHover();
+    }
+
+    //当前界面不处理鼠标按下事件
+    @Override
+    public void mousePressed(MouseEvent e) {
+    }
+
+    //当前界面不处理鼠标松开事件
+    @Override
+    public void mouseReleased(MouseEvent e) {
+    }
+
+    //当前界面不处理鼠标进入事件
+    @Override
+    public void mouseEntered(MouseEvent e) {
+    }
+
+    //当前界面不处理鼠标拖拽事件
+    @Override
+    public void mouseDragged(MouseEvent e) {
+    }
+
+    //按照配置间隔刷新画面，逻辑线程结束后同步停止重绘
     @Override
     public void run() {
-        int sleep= GameLoad.getInt("game.repaintInterval");
-        while(true) {
+        int sleep=GameLoad.getInt("game.repaintInterval");
+        while(gameThread.isRunning()) {
             repaint();
             try {
                 Thread.sleep(sleep);
@@ -57,5 +148,16 @@ public class GameMainJPanel extends JPanel implements Runnable {
                 return;
             }
         }
+        closeGameWindow();
+    }
+
+    //逻辑线程停止后在 Swing 事件线程中关闭当前游戏窗口
+    private void closeGameWindow() {
+        SwingUtilities.invokeLater(() -> {
+            Window window=SwingUtilities.getWindowAncestor(this);
+            if(window!=null) {
+                window.dispose();
+            }
+        });
     }
 }
