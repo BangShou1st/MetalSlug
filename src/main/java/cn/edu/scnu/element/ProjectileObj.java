@@ -1,9 +1,12 @@
 package cn.edu.scnu.element;
 
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.List;
 
 /**
  * 发射物基类，集中 attack 字段和世界越界判定，减少 weapon 子类重复代码。
@@ -36,13 +39,19 @@ public abstract class ProjectileObj extends ElementObj {
         return attack;
     }
 
-    /**
-     * 超出世界边界时自杀。
-     * -200 而非 0 是为左侧预留一个缓冲带，避免弹体刚好卡在边界反复生灭。
-     * TODO: 等待 A 提供统一 worldWidth 后替换 window.width * 3
-     */
+    //获取当前地图的真实世界宽度，地图尚未加载时回退到窗口宽度
+    protected int getWorldWidth() {
+        List<ElementObj> maps=ElementManager.getManager()
+                .getElementByKey(GameElement.MAPS);
+        if(maps.isEmpty()) {
+            return GameLoad.getInt("window.width");
+        }
+        return maps.get(0).getW();
+    }
+
+    //发射物整体离开当前地图的真实世界边界时失效
     protected void checkWorldBounds() {
-        if (getX() < -200 || getX() > GameLoad.getInt("window.width") * 3) {
+        if (getX() + getW() < 0 || getX() > getWorldWidth()) {
             setLive(false);
         }
     }

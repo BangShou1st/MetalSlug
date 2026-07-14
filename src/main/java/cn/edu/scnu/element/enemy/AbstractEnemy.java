@@ -178,8 +178,8 @@ public abstract class AbstractEnemy extends RoleObj {
         }
 
         if (!attackReleased && getImageIndex() == getAttackFrame()) {
-            //成员 B 的敌方发射物尚未合并，这里只保留每次攻击唯一的释放时机
             attackReleased=true;
+            releaseAttack();
         }
 
         if (isAnimationEnd()) {
@@ -187,6 +187,10 @@ public abstract class AbstractEnemy extends RoleObj {
             attackReleased=false;
             state=EnemyState.IDLE;
         }
+    }
+
+    //在攻击动画的唯一释放帧执行具体攻击行为
+    protected void releaseAttack() {
     }
 
     //根据基础移动尺寸返回较贴合身体区域的碰撞框

@@ -1,6 +1,8 @@
 package cn.edu.scnu.element.weapon;
 
 import cn.edu.scnu.element.ProjectileObj;
+import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.element.MapObj;
 import cn.edu.scnu.element.effect.ExplosionEffect;
 import cn.edu.scnu.manager.ElementManager;
 import cn.edu.scnu.manager.GameElement;
@@ -24,6 +26,7 @@ public class Grenade extends ProjectileObj {
     private double vy;
     /** 防止 {@link #die()} 与 {@link #move()} 重复触发爆炸 */
     private boolean exploded;
+    private boolean blastApplied; //本次爆炸范围伤害是否已经结算
     /** 引信剩余逻辑帧数 */
     private int fuse;
 
@@ -52,12 +55,30 @@ public class Grenade extends ProjectileObj {
         setY((int) Math.round(preciseY));
 
         fuse--;
-        int groundY = GameLoad.getInt("player.groundY");
-        if (fuse <= 0 || getY() >= groundY) {
+        int groundTop=getGroundTop();
+        if (fuse <= 0 || getY() >= groundTop) {
+            if(getY()>groundTop) {
+                setY(groundTop);
+                preciseY=groundTop;
+            }
             explode();
         }
         // 先检查引信/地面，再检查越界，避免 explode() 设 setLive(false) 后 checkWorldBounds 再做一次无用判断
         checkWorldBounds();
+        if(!isLive()) {
+            explode();
+        }
+    }
+
+    //读取当前地图地面并换算为手雷左上角落地位置
+    private int getGroundTop() {
+        java.util.List<ElementObj> maps=ElementManager.getManager()
+                .getElementByKey(GameElement.MAPS);
+        if(maps.isEmpty()) {
+            return GameLoad.getInt("window.height")-getH();
+        }
+        MapObj map=(MapObj)maps.get(0);
+        return map.getGroundY()-getH();
     }
 
     /**
@@ -75,6 +96,20 @@ public class Grenade extends ProjectileObj {
         ElementManager.getManager().addElement(
                 new ExplosionEffect(cx, cy), GameElement.EFFECT);
         setLive(false);
+    }
+
+    //碰到敌方目标时进入统一爆炸流程
+    public void triggerExplosion() {
+        explode();
+    }
+
+    //确认爆炸后仅允许主线程领取一次范围伤害结算
+    public boolean claimBlastDamage() {
+        if(!exploded || blastApplied) {
+            return false;
+        }
+        blastApplied=true;
+        return true;
     }
 
     /**

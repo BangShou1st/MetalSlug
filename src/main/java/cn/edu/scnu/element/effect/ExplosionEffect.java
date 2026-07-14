@@ -1,6 +1,7 @@
 package cn.edu.scnu.element.effect;
 
 import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.manager.GameLoad;
 
 import java.awt.*;
 
@@ -14,7 +15,8 @@ import java.awt.*;
 public class ExplosionEffect extends ElementObj {
     /** 在爆炸中心居中显示 */
     public ExplosionEffect(int cx, int cy) {
-        super(cx - 47, cy - 46, 94, 92, null);
+        super(cx - 47, cy - 46, 94, 92,
+                GameLoad.getImages("effect.explosion").get(0));
     }
 
     @Override

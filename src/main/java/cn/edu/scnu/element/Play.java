@@ -1,5 +1,10 @@
 package cn.edu.scnu.element;
 
+import cn.edu.scnu.element.effect.MuzzleEffect;
+import cn.edu.scnu.element.weapon.Bullet;
+import cn.edu.scnu.element.weapon.Grenade;
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.*;
@@ -30,6 +35,12 @@ public class Play extends RoleObj {
     private static final int HURT_INTERVAL=1; //受伤动画每个逻辑帧切换一次
     private static final int DEATH_INTERVAL=1; //死亡动画每个逻辑帧切换一次
     private static final int INVINCIBLE_FRAMES=20; //受伤后的无敌逻辑帧数
+    private static final int SHOOT_RELEASE_FRAME=2; //射击动作释放子弹的动画帧
+    private static final int THROW_RELEASE_FRAME=3; //投掷动作释放手雷的动画帧
+    private static final int BULLET_WIDTH=23; //普通子弹逻辑宽度
+    private static final int BULLET_HEIGHT=7; //普通子弹逻辑高度
+    private static final int MUZZLE_WIDTH=32; //枪口特效逻辑宽度
+    private static final int MUZZLE_HEIGHT=35; //枪口特效逻辑高度
 
     //玩家当前动作状态
     private enum PlayerState {
@@ -63,6 +74,7 @@ public class Play extends RoleObj {
     private PlayerState state=PlayerState.STAND; //玩家当前动作状态
     private int invincibleFrames; //玩家剩余无敌逻辑帧数
     private boolean actionAnimationStarted; //一次性动作动画是否已经实际开始播放
+    private boolean actionReleased; //当前动作是否已经生成发射物
 
     //供 GameLoad 通过反射创建玩家模板
     public Play() {
@@ -198,6 +210,7 @@ public class Play extends RoleObj {
     private void enterAction(PlayerState nextState) {
         state=nextState;
         actionAnimationStarted=false;
+        actionReleased=false;
     }
 
     //判断射击或投掷动画是否正在锁定普通动作
@@ -218,6 +231,7 @@ public class Play extends RoleObj {
             }
             state=PlayerState.STAND;
             actionAnimationStarted=false;
+            actionReleased=false;
             return true;
         }
         return false;
@@ -342,6 +356,62 @@ public class Play extends RoleObj {
                 playAnimation(STAND_IMAGE_KEY,gameTime,STAND_INTERVAL,true);
                 break;
         }
+    }
+
+    //在射击或投掷动画的唯一释放帧创建玩家发射物
+    @Override
+    protected void add(long gameTime) {
+        if(actionReleased) {
+            return;
+        }
+        if((state==PlayerState.SHOOT_STAND
+                || state==PlayerState.SHOOT_CROUCH)
+                && getImageIndex()==SHOOT_RELEASE_FRAME) {
+            actionReleased=true;
+            releaseBullet();
+        }else if(state==PlayerState.THROW
+                && getImageIndex()==THROW_RELEASE_FRAME) {
+            actionReleased=true;
+            releaseGrenade();
+        }
+    }
+
+    //根据站姿、蹲姿和朝向计算枪口并创建一颗子弹与一次枪口特效
+    private void releaseBullet() {
+        int muzzleSourceX=44;
+        int muzzleSourceY=28;
+        if(state==PlayerState.SHOOT_CROUCH) {
+            muzzleSourceY=31;
+        }
+
+        int muzzleX=getX()+muzzleSourceX;
+        if(direction==DIRECTION_LEFT) {
+            muzzleX=getX()+getW()-1-muzzleSourceX;
+        }
+        int muzzleY=getY()+muzzleSourceY;
+        int bulletX=muzzleX;
+        int effectX=muzzleX;
+        if(direction==DIRECTION_LEFT) {
+            bulletX-=BULLET_WIDTH;
+            effectX-=MUZZLE_WIDTH;
+        }
+        int bulletY=muzzleY-BULLET_HEIGHT/2;
+        int effectY=muzzleY-MUZZLE_HEIGHT/2;
+
+        ElementManager manager=ElementManager.getManager();
+        manager.addElement(new Bullet(bulletX,bulletY,direction,getAttack()),
+                GameElement.PLAYFILE);
+        manager.addElement(new MuzzleEffect(effectX,effectY,direction),
+                GameElement.EFFECT);
+    }
+
+    //根据玩家当前朝向从投掷动作的手部位置创建一枚手雷
+    private void releaseGrenade() {
+        int releaseX=getX()+getW()/2;
+        int releaseY=getY()+(int)Math.round(getH()*0.12);
+        ElementManager.getManager().addElement(
+                new Grenade(releaseX,releaseY,direction,getAttack()),
+                GameElement.PLAYFILE);
     }
 
     //按照玩家朝向绘制当前动画帧
