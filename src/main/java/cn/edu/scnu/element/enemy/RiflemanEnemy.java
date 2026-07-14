@@ -1,6 +1,10 @@
 package cn.edu.scnu.element.enemy;
 
 import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.element.effect.MuzzleEffect;
+import cn.edu.scnu.element.weapon.EnemyBullet;
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.ImageIcon;
@@ -16,7 +20,7 @@ public class RiflemanEnemy extends AbstractEnemy {
     private static final double MOVE_SPEED=1.5; //步枪兵水平移动速度
     private static final int DETECT_RANGE=400; //步枪兵发现玩家的水平范围
     private static final int ATTACK_RANGE=300; //步枪兵开始攻击的水平范围
-    private static final int ATTACK_FRAME=1; //步枪兵释放攻击的动画帧
+    private static final int ATTACK_FRAME=2; //步枪兵释放攻击的动画帧
     private static final int ATTACK_COOLDOWN_FRAMES=40; //两次攻击之间的冷却逻辑帧数
 
     //供 GameLoad 通过反射创建步枪兵模板
@@ -92,5 +96,35 @@ public class RiflemanEnemy extends AbstractEnemy {
     @Override
     protected int getAttackCooldownFrames() {
         return ATTACK_COOLDOWN_FRAMES;
+    }
+
+    //在唯一攻击帧创建步枪兵子弹和枪口特效
+    @Override
+    protected void releaseAttack() {
+        ImageIcon frame=getIcon();
+        int drawWidth=frame.getIconWidth();
+        int drawHeight=frame.getIconHeight();
+        int drawX=getX()+getW()/2-drawWidth/2;
+        int drawY=getY()+getH()-drawHeight;
+        int direction=-1;
+        int muzzleX=drawX+(int)Math.round(drawWidth*0.04);
+        if(facingRight) {
+            direction=1;
+            muzzleX=drawX+(int)Math.round(drawWidth*0.96);
+        }
+        int muzzleY=drawY+(int)Math.round(drawHeight*0.52);
+        int bulletX=muzzleX;
+        int effectX=muzzleX;
+        if(direction<0) {
+            bulletX-=23;
+            effectX-=32;
+        }
+
+        ElementManager manager=ElementManager.getManager();
+        manager.addElement(new EnemyBullet(
+                bulletX,muzzleY-3,direction,getAttack()),
+                GameElement.ENEMYFILE);
+        manager.addElement(new MuzzleEffect(
+                effectX,muzzleY-17,direction),GameElement.EFFECT);
     }
 }

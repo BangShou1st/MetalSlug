@@ -3,12 +3,18 @@ package cn.edu.scnu.controller;
 import cn.edu.scnu.element.ElementObj;
 import cn.edu.scnu.element.MapObj;
 import cn.edu.scnu.element.Play;
+import cn.edu.scnu.element.RoleObj;
+import cn.edu.scnu.element.effect.HitEffect;
+import cn.edu.scnu.element.weapon.Bullet;
+import cn.edu.scnu.element.weapon.EnemyBullet;
+import cn.edu.scnu.element.weapon.Grenade;
 import cn.edu.scnu.manager.Camera;
 import cn.edu.scnu.manager.ElementManager;
 import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.*;
+import java.awt.Rectangle;
 import java.util.List;
 import java.util.Map;
 
@@ -104,7 +110,25 @@ public class GameThread extends Thread {
         Play play=(Play)em.getElementByKey(GameElement.PLAY).get(0);
         play.setWorldWidth(map.getW());
         play.placeOnGround(map.getGroundY());
+        loadEnemies(map);
 
+    }
+
+    //根据当前关卡配置创建普通敌人并与地图地面对齐
+    private void loadEnemies(MapObj map) {
+        int count=GameLoad.getInt("level"+currentLevel+".enemy.count");
+        for(int i=1;i<=count;i++) {
+            String value=GameLoad.getString(
+                    "level"+currentLevel+".enemy."+i);
+            String[] data=value.split("\\|",2);
+            if(data.length!=2) {
+                throw new IllegalArgumentException("敌人配置格式应为 对象键|创建参数");
+            }
+            ElementObj template=GameLoad.getObj(data[0].trim());
+            ElementObj enemy=template.createElement(data[1].trim());
+            enemy.setY(map.getGroundY()-enemy.getH());
+            em.addElement(enemy,GameElement.ENEMY);
+        }
     }
 
     /**
@@ -138,9 +162,10 @@ public class GameThread extends Thread {
             }
             updateCamera(plays);
 
-            elementPk(enemys,playFiles);   //玩家子弹攻击敌人
-            elementPk(bosses,playFiles);   //玩家子弹攻击Boss
-            elementPk(plays,enemyFiles);   //敌方子弹攻击玩家
+            playerProjectilePk(enemys,playFiles);   //玩家发射物攻击敌人
+            playerProjectilePk(bosses,playFiles);   //玩家发射物攻击Boss
+            applyGrenadeBlasts(playFiles,enemys,bosses);
+            enemyProjectilePk(plays,enemyFiles);   //敌方发射物攻击玩家
 
             gameTime++;
 
@@ -188,22 +213,117 @@ public class GameThread extends Thread {
         }
     }
 
-    private void elementPk(List<ElementObj> listA,List<ElementObj> listB) {
-        for(int i=0;i<listA.size();i++) {
-            ElementObj a=listA.get(i);
-            if(!a.isLive()) {
+    //判断角色是否仍可接受发射物碰撞
+    private boolean canReceiveProjectile(ElementObj target) {
+        if(!target.isLive()) {
+            return false;
+        }
+        if(target instanceof RoleObj) {
+            return ((RoleObj)target).getHp()>0;
+        }
+        return true;
+    }
+
+    //处理玩家发射物与敌方目标的碰撞
+    private void playerProjectilePk(List<ElementObj> targets,
+                                    List<ElementObj> projectiles) {
+        for(int i=0;i<targets.size();i++) {
+            ElementObj target=targets.get(i);
+            if(!canReceiveProjectile(target)) {
                 continue;
             }
-            for(int j=0;j<listB.size();j++) {
-                ElementObj b=listB.get(j);
-                if(!b.isLive()) {
+            for(int j=0;j<projectiles.size();j++) {
+                ElementObj projectile=projectiles.get(j);
+                if(!projectile.isLive()) {
                     continue;
                 }
-                if(a.pk(b)) {
-                    a.hurt(b.getAttack());
-                    b.setLive(false);
+                if(target.pk(projectile)) {
+                    if(projectile instanceof Grenade) {
+                        ((Grenade)projectile).triggerExplosion();
+                    }else {
+                        target.hurt(projectile.getAttack());
+                        projectile.setLive(false);
+                        if(projectile instanceof Bullet) {
+                            addHitEffect(target,projectile);
+                        }
+                    }
                     break;
                 }
+            }
+        }
+    }
+
+    //处理敌方发射物与玩家的碰撞
+    private void enemyProjectilePk(List<ElementObj> players,
+                                   List<ElementObj> projectiles) {
+        for(int i=0;i<players.size();i++) {
+            ElementObj player=players.get(i);
+            if(!canReceiveProjectile(player)) {
+                continue;
+            }
+            for(int j=0;j<projectiles.size();j++) {
+                ElementObj projectile=projectiles.get(j);
+                if(!projectile.isLive()) {
+                    continue;
+                }
+                if(player.pk(projectile)) {
+                    player.hurt(projectile.getAttack());
+                    projectile.setLive(false);
+                    if(projectile instanceof EnemyBullet) {
+                        addHitEffect(player,projectile);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    //在两个碰撞矩形的交集中心生成普通命中特效
+    private void addHitEffect(ElementObj target,ElementObj projectile) {
+        Rectangle intersection=target.getRectangle()
+                .intersection(projectile.getRectangle());
+        int centerX=intersection.x+intersection.width/2;
+        int centerY=intersection.y+intersection.height/2;
+        em.addElement(new HitEffect(centerX,centerY),GameElement.EFFECT);
+    }
+
+    //结算本帧新发生的手雷爆炸范围伤害
+    private void applyGrenadeBlasts(List<ElementObj> projectiles,
+                                    List<ElementObj> enemies,
+                                    List<ElementObj> bosses) {
+        for(ElementObj projectile:projectiles) {
+            if(!(projectile instanceof Grenade)) {
+                continue;
+            }
+            Grenade grenade=(Grenade)projectile;
+            if(!grenade.claimBlastDamage()) {
+                continue;
+            }
+            applyGrenadeBlast(grenade,enemies);
+            applyGrenadeBlast(grenade,bosses);
+        }
+    }
+
+    //对手雷爆炸半径内的每个存活目标造成一次范围伤害
+    private void applyGrenadeBlast(Grenade grenade,List<ElementObj> targets) {
+        int grenadeX=grenade.getX()+grenade.getW()/2;
+        int grenadeY=grenade.getY()+grenade.getH()/2;
+        int radius=grenade.getBlastRadius();
+        long radiusSquared=(long)radius*radius;
+        for(ElementObj target:targets) {
+            if(!target.isLive()) {
+                continue;
+            }
+            if(target instanceof RoleObj && ((RoleObj)target).getHp()<=0) {
+                continue;
+            }
+            Rectangle rectangle=target.getRectangle();
+            int targetX=rectangle.x+rectangle.width/2;
+            int targetY=rectangle.y+rectangle.height/2;
+            long dx=targetX-grenadeX;
+            long dy=targetY-grenadeY;
+            if(dx*dx+dy*dy<=radiusSquared) {
+                target.hurt(grenade.getBlastDamage());
             }
         }
     }

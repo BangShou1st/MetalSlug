@@ -1,6 +1,7 @@
 package cn.edu.scnu.element.effect;
 
 import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.manager.GameLoad;
 
 import java.awt.*;
 
@@ -12,7 +13,8 @@ import java.awt.*;
 public class HitEffect extends ElementObj {
     /** 在命中点居中显示 */
     public HitEffect(int x, int y) {
-        super(x - 12, y - 12, 24, 24, null);
+        super(x - 12, y - 12, 24, 24,
+                GameLoad.getImages("effect.hit").get(0));
     }
 
     @Override
