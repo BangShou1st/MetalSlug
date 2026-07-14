@@ -1,10 +1,14 @@
 package cn.edu.scnu.element.weapon;
 
+import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.element.MapObj;
 import cn.edu.scnu.element.ProjectileObj;
 import cn.edu.scnu.element.effect.ExplosionEffect;
 import cn.edu.scnu.manager.ElementManager;
 import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
+
+import java.util.List;
 
 /**
  * 手雷，抛物线运动，引信结束或落地时触发爆炸。
@@ -42,6 +46,19 @@ public class Grenade extends ProjectileObj {
         this.fuse = 120; // 约 6 秒（60 帧/秒）
     }
 
+    /**
+     * 从已加载的地图对象获取地面纵坐标，并换算为手雷左上角落地位置。
+     */
+    private int getGroundTop() {
+        List<ElementObj> maps = ElementManager.getManager()
+                .getElementByKey(GameElement.MAPS);
+        if (maps.isEmpty()) {
+            return GameLoad.getInt("player.groundY");
+        }
+        MapObj map = (MapObj) maps.get(0);
+        return map.getGroundY() - getH();
+    }
+
     @Override
     protected void move() {
         // 抛物线积分：水平匀速，垂直受重力加速
@@ -52,8 +69,12 @@ public class Grenade extends ProjectileObj {
         setY((int) Math.round(preciseY));
 
         fuse--;
-        int groundY = GameLoad.getInt("player.groundY");
-        if (fuse <= 0 || getY() >= groundY) {
+        int groundTop = getGroundTop();
+        if (fuse <= 0 || getY() >= groundTop) {
+            if (getY() > groundTop) {
+                setY(groundTop);
+                preciseY = groundTop;
+            }
             explode();
         }
         // 先检查引信/地面，再检查越界，避免 explode() 设 setLive(false) 后 checkWorldBounds 再做一次无用判断
@@ -88,16 +109,14 @@ public class Grenade extends ProjectileObj {
     }
 
     /**
-     * 爆炸半径（像素），供 A 接入范围伤害。
-     * TODO: A 在 GameThread 中实现范围碰撞时使用此值
+     * 爆炸半径（像素），由 GameThread 范围碰撞使用。
      */
     public int getBlastRadius() {
         return 80;
     }
 
     /**
-     * 范围爆炸伤害，供 A 接入范围伤害。
-     * TODO: A 在 GameThread 中实现范围碰撞时使用此值
+     * 范围爆炸伤害，由 GameThread 范围碰撞使用。
      */
     public int getBlastDamage() {
         return getAttack() * 2;

@@ -50,8 +50,7 @@ public class BossShell extends ProjectileObj {
 
     /**
      * 销毁时在弹体中心生成 ExplosionEffect。
-     * 当前命中、越界均触发爆炸，若后续需要越界不爆炸，需在此处判断死亡原因。
-     * TODO: 确认越界时是否需要抑制爆炸
+     * 命中与越界均触发爆炸，简单有效，四天版本不做细分。
      */
     @Override
     public void die() {
