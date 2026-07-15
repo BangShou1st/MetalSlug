@@ -1,6 +1,9 @@
 package cn.edu.scnu.element.weapon;
 
 import cn.edu.scnu.element.ProjectileObj;
+import cn.edu.scnu.element.effect.HitEffect;
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import java.awt.Graphics;
@@ -39,5 +42,14 @@ public class EnemyBullet extends ProjectileObj {
     protected void move() {
         setX(getX() + vx);
         checkWorldBounds();
+    }
+
+    @Override
+    public void die() {
+        if (getX() >= -200 && getX() <= GameLoad.getInt("window.width") * 3) {
+            int cx = getX() + getW() / 2;
+            int cy = getY() + getH() / 2;
+            ElementManager.getManager().addElement(new HitEffect(cx, cy), GameElement.EFFECT);
+        }
     }
 }
