@@ -1,5 +1,12 @@
 package cn.edu.scnu.element;
 
+import cn.edu.scnu.element.effect.MuzzleEffect;
+import cn.edu.scnu.element.weapon.Bullet;
+import cn.edu.scnu.element.weapon.Grenade;
+import cn.edu.scnu.element.weapon.Rocket;
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameAudio;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.*;
@@ -11,6 +18,7 @@ import java.awt.event.KeyEvent;
  */
 public class Play extends RoleObj {
     private static final String STAND_IMAGE_KEY="player.stand"; //站立动画键
+    private static final String IDLE_IMAGE_KEY="player.idle"; //特殊待机动画键
     private static final String RUN_IMAGE_KEY="player.run"; //跑步动画键
     private static final String JUMP_IMAGE_KEY="player.jump"; //跳跃动画键
     private static final String CROUCH_IMAGE_KEY="player.crouch"; //下蹲图片键
@@ -22,7 +30,9 @@ public class Play extends RoleObj {
     private static final int DIRECTION_RIGHT=1; //朝右的方向值
     private static final int DIRECTION_LEFT=-1; //朝左的方向值
     private static final int STAND_INTERVAL=1; //站立图片刷新间隔
-    private static final int RUN_INTERVAL=1; //跑步动画每个逻辑帧切换一次
+    private static final int IDLE_INTERVAL=2; //特殊待机动画换帧间隔
+    private static final int IDLE_TRIGGER_FRAMES=60; //静止约三秒后播放特殊待机
+    private static final int RUN_INTERVAL=2; //跑步动画每两个逻辑帧切换一次
     private static final int JUMP_INTERVAL=1; //跳跃动画每个逻辑帧切换一次
     private static final int CROUCH_INTERVAL=1; //下蹲图片刷新间隔
     private static final int SHOOT_INTERVAL=1; //射击动画每个逻辑帧切换一次
@@ -30,10 +40,15 @@ public class Play extends RoleObj {
     private static final int HURT_INTERVAL=1; //受伤动画每个逻辑帧切换一次
     private static final int DEATH_INTERVAL=1; //死亡动画每个逻辑帧切换一次
     private static final int INVINCIBLE_FRAMES=20; //受伤后的无敌逻辑帧数
+    private static final int SHOOT_RELEASE_FRAME=2; //射击动作释放子弹的动画帧
+    private static final int THROW_RELEASE_FRAME=3; //投掷动作释放手雷的动画帧
+    private static final int FOOTSTEP_FRAME_ONE=2; //跑步动画第一个落脚帧
+    private static final int FOOTSTEP_FRAME_TWO=8; //跑步动画第二个落脚帧
 
     //玩家当前动作状态
     private enum PlayerState {
         STAND, //站立
+        IDLE, //长时间静止后播放特殊待机动画
         RUN, //跑动
         JUMP, //跳跃
         CROUCH, //下蹲
@@ -42,6 +57,12 @@ public class Play extends RoleObj {
         THROW, //投掷手雷
         HURT, //受伤
         DEAD //死亡
+    }
+
+    //当前射击动作实际释放的武器
+    private enum ShotType {
+        BULLET, //普通子弹
+        ROCKET //火箭弹
     }
 
     private boolean leftPressed; //是否按住左方向键
@@ -58,11 +79,16 @@ public class Play extends RoleObj {
     private int gravity; //重力
     private int groundY; //玩家脚底对应的地面纵坐标
     private int worldWidth; //玩家可以移动的地图世界宽度
+    private int scalePercent; //玩家素材显示缩放百分比
     private double preciseY; //跳跃过程中使用的精确纵坐标
     private double verticalSpeed; //玩家当前纵向速度
     private PlayerState state=PlayerState.STAND; //玩家当前动作状态
     private int invincibleFrames; //玩家剩余无敌逻辑帧数
     private boolean actionAnimationStarted; //一次性动作动画是否已经实际开始播放
+    private boolean actionReleased; //当前动作是否已经生成发射物
+    private int idleFrames; //玩家连续静止的逻辑帧数
+    private ShotType shotType=ShotType.BULLET; //当前射击动作使用的武器
+    private int lastFootstepFrame=-1; //上一次播放脚步声的跑步动画帧
 
     //供 GameLoad 通过反射创建玩家模板
     public Play() {
@@ -70,12 +96,13 @@ public class Play extends RoleObj {
 
     //创建具有实际位置、战斗属性和运动参数的玩家
     private Play(int x,int y,int w,int h,ImageIcon icon,int hp,int attack,int speed,
-                 int jumpSpeed,int gravity,int groundY) {
+                 int jumpSpeed,int gravity,int scalePercent) {
         super(x,y,w,h,icon,hp,attack);
         this.speed=speed;
         this.jumpSpeed=jumpSpeed;
         this.gravity=gravity;
-        this.groundY=groundY;
+        this.groundY=0;
+        this.scalePercent=scalePercent;
         worldWidth=GameLoad.getInt("window.width");
         preciseY=y;
         verticalSpeed=0;
@@ -95,9 +122,11 @@ public class Play extends RoleObj {
         int speed=GameLoad.getInt("player.speed");
         int jumpSpeed=GameLoad.getInt("player.jumpSpeed");
         int gravity=GameLoad.getInt("player.gravity");
-        int groundY=GameLoad.getInt("player.groundY");
-        return new Play(x,y,icon.getIconWidth(),icon.getIconHeight(),icon,hp,attack,
-                speed,jumpSpeed,gravity,groundY);
+        int scalePercent=GameLoad.getInt("sprite.player.scalePercent");
+        Rectangle opaque=getOpaqueBounds(icon);
+        return new Play(x,y,scalePixels(opaque.width,scalePercent),
+                scalePixels(opaque.height,scalePercent),icon,hp,attack,
+                speed,jumpSpeed,gravity,scalePercent);
     }
 
     //设置玩家在当前地图中的水平移动范围
@@ -118,24 +147,36 @@ public class Play extends RoleObj {
     //记录移动、跳跃、下蹲、射击和投掷的输入状态
     @Override
     public void keyClick(boolean pressed,int key) {
+        //A 或左方向键控制左移
         if(key==KeyEvent.VK_A || key==KeyEvent.VK_LEFT) {
             leftPressed=pressed;
+        //D 或右方向键控制右移
         }else if(key==KeyEvent.VK_D || key==KeyEvent.VK_RIGHT) {
             rightPressed=pressed;
+        //W 或上方向键请求跳跃
         }else if(pressed && (key==KeyEvent.VK_W || key==KeyEvent.VK_UP)) {
             jumpRequested=true;
+        //S 或下方向键控制下蹲
         }else if(key==KeyEvent.VK_S || key==KeyEvent.VK_DOWN) {
             crouchPressed=pressed;
+        //J 使用普通子弹
         }else if(pressed && key==KeyEvent.VK_J) {
+            shotType=ShotType.BULLET;
             shootRequested=true;
+        //K 投掷手雷
         }else if(pressed && key==KeyEvent.VK_K) {
             throwRequested=true;
+        //R 使用火箭弹
+        }else if(pressed && key==KeyEvent.VK_R) {
+            shotType=ShotType.ROCKET;
+            shootRequested=true;
         }
     }
 
     //玩家受伤时自行扣血，使死亡动画播完前仍留在框架更新列表中
     @Override
     public void hurt(int damage) {
+        //死亡或无敌期间不再受伤
         if(state==PlayerState.DEAD || invincibleFrames>0) {
             return;
         }
@@ -149,11 +190,15 @@ public class Play extends RoleObj {
         shootRequested=false;
         throwRequested=false;
         moving=false;
+        idleFrames=0;
 
-        //不能调用 super.hurt()，否则生命归零时会立即 setLive(false)，死亡动画来不及播放
+        //生命归零时先播放死亡动画
         if(remainingHp==0) {
+            GameAudio.play("voice.playerDeath");
             enterAction(PlayerState.DEAD);
+        //受伤后进入短暂无敌
         }else {
+            GameAudio.play("voice.playerHurt");
             invincibleFrames=INVINCIBLE_FRAMES;
             enterAction(PlayerState.HURT);
         }
@@ -163,14 +208,18 @@ public class Play extends RoleObj {
     @Override
     protected void move() {
         updateInvincibility();
+        interruptIdleIfRequested();
         boolean actionFinished=finishCurrentAction();
+        //死亡动画结束后停止更新
         if(!isLive()) {
             return;
         }
+        //当前动作可打断时处理新请求
         if(!actionFinished && !isActionLocked()) {
             startRequestedAction();
         }
 
+        //站在地面且动作未锁定时起跳
         if(!isActionLocked() && jumpRequested && onGround) {
             //屏幕 y 轴向下为正，因此负速度表示向上起跳
             verticalSpeed=-jumpSpeed;
@@ -198,6 +247,20 @@ public class Play extends RoleObj {
     private void enterAction(PlayerState nextState) {
         state=nextState;
         actionAnimationStarted=false;
+        actionReleased=false;
+        idleFrames=0;
+    }
+
+    //方向、跳跃、下蹲或任一攻击请求立即打断特殊待机
+    private void interruptIdleIfRequested() {
+        if(state==PlayerState.IDLE && (leftPressed || rightPressed
+                || jumpRequested || crouchPressed || shootRequested
+                || throwRequested)) {
+            state=PlayerState.STAND;
+            actionAnimationStarted=false;
+            actionReleased=false;
+            idleFrames=0;
+        }
     }
 
     //判断射击或投掷动画是否正在锁定普通动作
@@ -211,13 +274,17 @@ public class Play extends RoleObj {
 
     //在一次性动画结束后退出动作，并留出一帧切回基础动画
     private boolean finishCurrentAction() {
-        if(isActionLocked() && actionAnimationStarted && isAnimationEnd()) {
+        boolean oneTimeAnimation=isActionLocked() || state==PlayerState.IDLE;
+        //一次性动画播放完后恢复站立
+        if(oneTimeAnimation && actionAnimationStarted && isAnimationEnd()) {
+            //死亡动画结束后移除玩家
             if(state==PlayerState.DEAD) {
                 setLive(false);
                 return true;
             }
             state=PlayerState.STAND;
             actionAnimationStarted=false;
+            actionReleased=false;
             return true;
         }
         return false;
@@ -225,9 +292,11 @@ public class Play extends RoleObj {
 
     //按投掷优先于射击的顺序消费本帧动作请求
     private void startRequestedAction() {
+        //空中或动作锁定时不开始新动作
         if(isActionLocked() || !onGround) {
             return;
         }
+        //投掷优先于射击
         if(throwRequested) {
             enterAction(PlayerState.THROW);
         }else if(shootRequested && crouchPressed) {
@@ -242,6 +311,7 @@ public class Play extends RoleObj {
         int oldX=getX();
         int targetX=oldX;
         boolean crouching=onGround && crouchPressed;
+        //只有可移动状态才处理左右输入
         if(!isActionLocked() && !crouching && leftPressed!=rightPressed) {
             if(leftPressed) {
                 targetX-=speed;
@@ -270,7 +340,7 @@ public class Play extends RoleObj {
         }
     }
 
-    //跳跃    处理重力、空中位移和落地
+    //处理跳跃、重力和落地
     private void moveVertically() {
         if(!onGround) {
             //先按当前速度更新位置，重力再使下一帧速度逐渐向下增加
@@ -279,6 +349,7 @@ public class Play extends RoleObj {
 
             //玩家 y 表示图片左上角，脚底落点需要用地面坐标减去玩家高度
             int groundTop=groundY-getH();
+            //到达地面时停止下落
             if(preciseY>=groundTop) {
                 preciseY=groundTop;
                 verticalSpeed=0;
@@ -291,17 +362,31 @@ public class Play extends RoleObj {
 
     //在没有一次性动作时根据运动和输入更新基础状态
     private void updateBasicState() {
+        //一次性动作期间不切换基础状态
         if(isActionLocked()) {
+            idleFrames=0;
             return;
         }
+        if(state==PlayerState.IDLE) {
+            return;
+        }
+        //按移动情况选择基础动作
         if(!onGround) {
             state=PlayerState.JUMP;
+            idleFrames=0;
         }else if(crouchPressed) {
             state=PlayerState.CROUCH;
+            idleFrames=0;
         }else if(moving) {
             state=PlayerState.RUN;
+            idleFrames=0;
         }else {
             state=PlayerState.STAND;
+            idleFrames++;
+            //静止足够久后进入特殊待机
+            if(idleFrames>=IDLE_TRIGGER_FRAMES) {
+                enterAction(PlayerState.IDLE);
+            }
         }
     }
 
@@ -315,6 +400,10 @@ public class Play extends RoleObj {
                 break;
             case HURT:
                 playAnimation(HURT_IMAGE_KEY,gameTime,HURT_INTERVAL,false);
+                actionAnimationStarted=true;
+                break;
+            case IDLE:
+                playAnimation(IDLE_IMAGE_KEY,gameTime,IDLE_INTERVAL,false);
                 actionAnimationStarted=true;
                 break;
             case THROW:
@@ -337,21 +426,109 @@ public class Play extends RoleObj {
                 break;
             case RUN:
                 playAnimation(RUN_IMAGE_KEY,gameTime,RUN_INTERVAL,true);
+                playFootstepAtLandingFrame();
                 break;
             default:
                 playAnimation(STAND_IMAGE_KEY,gameTime,STAND_INTERVAL,true);
                 break;
         }
+        if(state!=PlayerState.RUN) {
+            lastFootstepFrame=-1;
+        }
+    }
+
+    //跑步动画停留在同一落脚帧时只播放一次脚步声
+    private void playFootstepAtLandingFrame() {
+        int frame=getImageIndex();
+        boolean landingFrame=frame==FOOTSTEP_FRAME_ONE
+                || frame==FOOTSTEP_FRAME_TWO;
+        if(landingFrame && frame!=lastFootstepFrame) {
+            GameAudio.playIfIdle("movement.footstep");
+            lastFootstepFrame=frame;
+        }
+    }
+
+    //在射击或投掷动画的唯一释放帧创建玩家发射物
+    @Override
+    protected void add(long gameTime) {
+        //当前动作已经释放过武器时跳过
+        if(actionReleased) {
+            return;
+        }
+        //射击动画到达释放帧时创建子弹
+        if((state==PlayerState.SHOOT_STAND
+                || state==PlayerState.SHOOT_CROUCH)
+                && getImageIndex()==SHOOT_RELEASE_FRAME) {
+            actionReleased=true;
+            releaseShot();
+        //投掷动画到达释放帧时创建手雷
+        }else if(state==PlayerState.THROW
+                && getImageIndex()==THROW_RELEASE_FRAME) {
+            actionReleased=true;
+            releaseGrenade();
+        }
+    }
+
+    //根据站姿、蹲姿、朝向和射击类型创建一颗发射物与一次枪口特效
+    private void releaseShot() {
+        boolean mirrored=direction==DIRECTION_LEFT;
+        Rectangle drawBounds=getFootAnchoredDrawBounds(getIcon(),scalePercent,mirrored);
+        double muzzleRatioX=direction==DIRECTION_RIGHT ? 0.83 : 0.17;
+        double muzzleRatioY=state==PlayerState.SHOOT_CROUCH ? 0.57 : 0.52;
+        int muzzleX=drawBounds.x+(int)Math.round(drawBounds.width*muzzleRatioX);
+        int muzzleY=drawBounds.y+(int)Math.round(drawBounds.height*muzzleRatioY);
+        ImageIcon bulletFrame=shotType==ShotType.ROCKET
+                ? GameLoad.getImage("weapon.rocket")
+                : GameLoad.getImages("weapon.bullet").get(0);
+        ImageIcon muzzleFrame=GameLoad.getImages("effect.muzzle").get(0);
+        int bulletWidth=bulletFrame.getIconWidth();
+        int bulletHeight=bulletFrame.getIconHeight();
+        int muzzleWidth=muzzleFrame.getIconWidth();
+        int muzzleHeight=muzzleFrame.getIconHeight();
+        int bulletX=direction==DIRECTION_RIGHT ? muzzleX : muzzleX-bulletWidth;
+        int effectX=direction==DIRECTION_RIGHT ? muzzleX : muzzleX-muzzleWidth;
+        int bulletY=muzzleY-bulletHeight/2;
+        int effectY=muzzleY-muzzleHeight/2;
+
+        //按当前武器创建发射物
+        ElementManager manager=ElementManager.getManager();
+        ElementObj projectile=shotType==ShotType.ROCKET
+                ? new Rocket(bulletX,bulletY,direction,getAttack()*2)
+                : new Bullet(bulletX,bulletY,direction,getAttack());
+        manager.addElement(projectile,GameElement.PLAYFILE);
+        manager.addElement(new MuzzleEffect(effectX,effectY,direction),
+                GameElement.EFFECT);
+    }
+
+    //根据玩家当前朝向从投掷动作的手部位置创建一枚手雷
+    private void releaseGrenade() {
+        boolean mirrored=direction==DIRECTION_LEFT;
+        Rectangle drawBounds=getFootAnchoredDrawBounds(getIcon(),scalePercent,mirrored);
+        int releaseX=drawBounds.x+(int)Math.round(drawBounds.width*
+                (direction==DIRECTION_RIGHT ? 0.62 : 0.38));
+        int releaseY=drawBounds.y+(int)Math.round(drawBounds.height*0.18);
+        ElementManager.getManager().addElement(
+                new Grenade(releaseX,releaseY,direction,getAttack()),
+                GameElement.PLAYFILE);
     }
 
     //按照玩家朝向绘制当前动画帧
     @Override
     public void showElement(Graphics g) {
-        if(direction==DIRECTION_LEFT) {
-            //负宽度绘制可以水平翻转图片，同时保持玩家逻辑位置不变
-            g.drawImage(getIcon().getImage(),getX()+getW(),getY(),-getW(),getH(),null);
-        }else {
-            g.drawImage(getIcon().getImage(),getX(),getY(),getW(),getH(),null);
-        }
+        drawFootAnchoredFrame(g,getIcon(),scalePercent,direction==DIRECTION_LEFT);
+    }
+
+    //站立和下蹲采用不同身体区域，均保持脚底位置不变
+    @Override
+    public Rectangle getRectangle() {
+        boolean crouching=state==PlayerState.CROUCH
+                || state==PlayerState.SHOOT_CROUCH;
+        double widthRatio=crouching ? 0.64 : 0.50;
+        double heightRatio=crouching ? 0.46 : 0.80;
+        int width=Math.max(1,(int)Math.round(getW()*widthRatio));
+        int height=Math.max(1,(int)Math.round(getH()*heightRatio));
+        int x=getX()+(getW()-width)/2;
+        int y=getY()+getH()-height;
+        return new Rectangle(x,y,width,height);
     }
 }

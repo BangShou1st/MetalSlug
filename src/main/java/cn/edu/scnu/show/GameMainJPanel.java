@@ -11,10 +11,7 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 
-/**
- * @说明 游戏的主要面板
- * @功能说明 委托画面绘制，处理鼠标输入并按配置间隔刷新
- */
+/** 负责画面刷新和鼠标输入的游戏面板。 */
 public class GameMainJPanel extends JPanel
         implements Runnable,MouseListener,MouseMotionListener {
     private final GameRenderer renderer=new GameRenderer(); //集中处理所有游戏画面的绘制
@@ -23,6 +20,10 @@ public class GameMainJPanel extends JPanel
 
     //创建负责刷新和输入的游戏面板
     public GameMainJPanel() {
+        int width=GameLoad.getInt("window.width");
+        int height=GameLoad.getInt("window.height");
+        setPreferredSize(new Dimension(width,height));
+        setFocusable(false);
     }
 
     //注入与游戏线程共用的摄像机
@@ -38,20 +39,22 @@ public class GameMainJPanel extends JPanel
 
     //将当前面板尺寸和悬停状态交给绘制器
     @Override
-    public void paint(Graphics g) {
-        super.paint(g);
+    protected void paintComponent(Graphics g) {
+        super.paintComponent(g);
         renderer.draw((Graphics2D)g,getWidth(),getHeight(),hoveredButton);
     }
 
     //处理界面按钮的鼠标左键点击
     @Override
     public void mouseClicked(MouseEvent e) {
+        //只处理鼠标左键
         if(!SwingUtilities.isLeftMouseButton(e)) {
             return;
         }
 
         MenuButton button=renderer.findButton(
                 e.getX(),e.getY(),getWidth(),getHeight());
+        //按命中的按钮切换游戏流程
         switch(button) {
             case START_GAME:
                 gameThread.openLevelSelect();
@@ -92,10 +95,12 @@ public class GameMainJPanel extends JPanel
     public void mouseMoved(MouseEvent e) {
         MenuButton next=renderer.findButton(
                 e.getX(),e.getY(),getWidth(),getHeight());
+        //悬停按钮变化时重新绘制
         if(next!=hoveredButton) {
             hoveredButton=next;
             repaint();
         }
+        //可点击区域显示手型光标
         if(next!=MenuButton.NONE) {
             setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         }else {
@@ -140,6 +145,7 @@ public class GameMainJPanel extends JPanel
     @Override
     public void run() {
         int sleep=GameLoad.getInt("game.repaintInterval");
+        //游戏运行期间按固定间隔重绘
         while(gameThread.isRunning()) {
             repaint();
             try {
@@ -153,6 +159,7 @@ public class GameMainJPanel extends JPanel
 
     //逻辑线程停止后在 Swing 事件线程中关闭当前游戏窗口
     private void closeGameWindow() {
+        //回到 Swing 事件线程关闭窗口
         SwingUtilities.invokeLater(() -> {
             Window window=SwingUtilities.getWindowAncestor(this);
             if(window!=null) {

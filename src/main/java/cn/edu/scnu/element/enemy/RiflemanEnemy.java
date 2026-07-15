@@ -1,11 +1,15 @@
 package cn.edu.scnu.element.enemy;
 
 import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.element.effect.MuzzleEffect;
+import cn.edu.scnu.element.weapon.EnemyBullet;
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.ImageIcon;
 
-//使用固定配置字符串创建并驱动步枪兵行为
+//使用普通子弹攻击的步枪兵
 public class RiflemanEnemy extends AbstractEnemy {
     private static final String MOVE_ANIMATION="enemy.rifleman.move"; //步枪兵移动动画键
     private static final String ATTACK_ANIMATION="enemy.rifleman.attack"; //步枪兵攻击动画键
@@ -14,19 +18,19 @@ public class RiflemanEnemy extends AbstractEnemy {
     private static final int ATTACK_INTERVAL=2; //攻击动画每两帧切换一次
     private static final int DEATH_INTERVAL=2; //死亡动画每两帧切换一次
     private static final double MOVE_SPEED=1.5; //步枪兵水平移动速度
-    private static final int DETECT_RANGE=400; //步枪兵发现玩家的水平范围
-    private static final int ATTACK_RANGE=300; //步枪兵开始攻击的水平范围
-    private static final int ATTACK_FRAME=1; //步枪兵释放攻击的动画帧
+    private static final int DETECT_RANGE=900; //步枪兵在视口内发现玩家的水平范围
+    private static final int ATTACK_RANGE=900; //步枪兵在视口内开始攻击的水平范围
+    private static final int ATTACK_FRAME=2; //步枪兵释放攻击的动画帧
     private static final int ATTACK_COOLDOWN_FRAMES=40; //两次攻击之间的冷却逻辑帧数
 
-    //供 GameLoad 通过反射创建步枪兵模板
+    //供 GameLoad 反射创建模板
     public RiflemanEnemy() {
     }
 
-    //使用已加载的移动首帧和配置数据创建步枪兵实体
+    //创建步枪兵
     private RiflemanEnemy(int x, int y, ImageIcon icon, int hp, int attack,
                           int patrolMinX, int patrolMaxX) {
-        super(x, y, icon, hp, attack);
+        super(x,y,icon,hp,attack,GameLoad.getInt("sprite.enemy.rifleman.scalePercent"));
         this.patrolMinX=patrolMinX;
         this.patrolMaxX=patrolMaxX;
         moveSpeed=MOVE_SPEED;
@@ -37,33 +41,13 @@ public class RiflemanEnemy extends AbstractEnemy {
     //按 x,y,hp,attack,patrolMinX,patrolMaxX 格式创建步枪兵
     @Override
     public ElementObj createElement(String str) {
-        String[] data=str.split(",");
-        if (data.length != 6) {
-            throw new IllegalArgumentException(
-                    "步枪兵配置格式应为 x,y,hp,attack,patrolMinX,patrolMaxX");
-        }
-
-        int x=Integer.parseInt(data[0].trim());
-        int y=Integer.parseInt(data[1].trim());
-        int hp=Integer.parseInt(data[2].trim());
-        int attack=Integer.parseInt(data[3].trim());
-        int patrolMinX=Integer.parseInt(data[4].trim());
-        int patrolMaxX=Integer.parseInt(data[5].trim());
-
-        if (patrolMinX > patrolMaxX) {
-            throw new IllegalArgumentException(
-                    "步枪兵 patrolMinX 不能大于 patrolMaxX");
-        }
-        if (x < patrolMinX || x > patrolMaxX) {
-            throw new IllegalArgumentException("步枪兵 x 必须位于巡逻区间内");
-        }
-
+        int[] data=parseEnemyConfig(str,"步枪兵");
         ImageIcon icon=GameLoad.getImages(MOVE_ANIMATION).get(0);
         return new RiflemanEnemy(
-                x, y, icon, hp, attack, patrolMinX, patrolMaxX);
+                data[0],data[1],icon,data[2],data[3],data[4],data[5]);
     }
 
-    //根据当前状态复用公共动画播放器切换图片
+    //根据状态播放动画
     @Override
     protected void updateImage(long gameTime) {
         switch (state) {
@@ -82,15 +66,44 @@ public class RiflemanEnemy extends AbstractEnemy {
         }
     }
 
-    //获取步枪兵的唯一攻击触发帧
+    //获取攻击释放帧
     @Override
     protected int getAttackFrame() {
         return ATTACK_FRAME;
     }
 
-    //获取步枪兵攻击结束后的冷却逻辑帧数
+    //获取攻击冷却
     @Override
     protected int getAttackCooldownFrames() {
         return ATTACK_COOLDOWN_FRAMES;
+    }
+
+    //玩家贴脸时保持步枪兵的中距离射击空间
+    @Override
+    protected int getRetreatRange() {
+        return 160;
+    }
+
+    //创建子弹和枪口特效
+    @Override
+    protected void releaseAttack() {
+        java.awt.Rectangle bounds=getCurrentDrawBounds();
+        int direction=facingRight ? 1 : -1;
+        int muzzleX=bounds.x+(int)Math.round(bounds.width*
+                (facingRight ? 0.96 : 0.04));
+        int muzzleY=bounds.y+(int)Math.round(bounds.height*0.52);
+        int bulletWidth=GameLoad.getImages("weapon.enemyBullet").get(0).getIconWidth();
+        int bulletHeight=GameLoad.getImages("weapon.enemyBullet").get(0).getIconHeight();
+        int muzzleWidth=GameLoad.getImages("effect.muzzle").get(0).getIconWidth();
+        int muzzleHeight=GameLoad.getImages("effect.muzzle").get(0).getIconHeight();
+        int bulletX=direction>0 ? muzzleX : muzzleX-bulletWidth;
+        int effectX=direction>0 ? muzzleX : muzzleX-muzzleWidth;
+
+        ElementManager manager=ElementManager.getManager();
+        manager.addElement(new EnemyBullet(
+                bulletX,muzzleY-bulletHeight/2,direction,getAttack()),
+                GameElement.ENEMYFILE);
+        manager.addElement(new MuzzleEffect(
+                effectX,muzzleY-muzzleHeight/2,direction),GameElement.EFFECT);
     }
 }
