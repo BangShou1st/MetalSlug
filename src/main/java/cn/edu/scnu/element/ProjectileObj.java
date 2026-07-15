@@ -8,11 +8,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.util.List;
 
-/**
- * 发射物基类，集中 attack 字段和世界越界判定，减少 weapon 子类重复代码。
- *
- * @author B
- */
+/** 发射物基类，负责伤害属性和世界边界判定。 */
 public abstract class ProjectileObj extends ElementObj {
     private int attack;
 
@@ -39,18 +35,20 @@ public abstract class ProjectileObj extends ElementObj {
         return attack;
     }
 
-    //获取当前地图的真实世界宽度，地图尚未加载时回退到窗口宽度
+    //地图未加载时使用窗口宽度
     protected int getWorldWidth() {
         List<ElementObj> maps=ElementManager.getManager()
                 .getElementByKey(GameElement.MAPS);
+        //没有地图时使用窗口宽度
         if(maps.isEmpty()) {
             return GameLoad.getInt("window.width");
         }
         return maps.get(0).getW();
     }
 
-    //发射物整体离开当前地图的真实世界边界时失效
+    //离开地图边界后失效
     protected void checkWorldBounds() {
+        //发射物整体离开左右边界后移除
         if (getX() + getW() < 0 || getX() > getWorldWidth()) {
             setLive(false);
         }

@@ -18,8 +18,8 @@ public class BikerEnemy extends AbstractEnemy {
     private static final int ATTACK_INTERVAL=2; //攻击动画换帧间隔
     private static final int DEATH_INTERVAL=2; //死亡动画换帧间隔
     private static final double MOVE_SPEED=4.0; //水平移动速度
-    private static final int DETECT_RANGE=500; //发现玩家范围
-    private static final int ATTACK_RANGE=300; //开始发射火箭范围
+    private static final int DETECT_RANGE=900; //在视口内发现玩家的水平范围
+    private static final int ATTACK_RANGE=900; //在视口内开始发射火箭的水平范围
     private static final int ATTACK_FRAME=2; //火箭释放帧
     private static final int ATTACK_COOLDOWN_FRAMES=45; //攻击冷却逻辑帧数
 
@@ -62,6 +62,14 @@ public class BikerEnemy extends AbstractEnemy {
     @Override
     protected int getAttackCooldownFrames() { return ATTACK_COOLDOWN_FRAMES; }
 
+    //玩家过近时利用高速重新拉开火箭射击距离
+    @Override
+    protected int getRetreatRange() { return 220; }
+
+    //摩托兵交战时保持高速接近和撤离特点
+    @Override
+    protected double getEngagedSpeedMultiplier() { return 1.2; }
+
     //在攻击关键帧从摩托兵武器位置发射火箭
     @Override
     protected void releaseAttack() {
@@ -70,13 +78,24 @@ public class BikerEnemy extends AbstractEnemy {
         int muzzleX=bounds.x+(int)Math.round(bounds.width*
                 (facingRight ? 0.78 : 0.22));
         int muzzleY=bounds.y+(int)Math.round(bounds.height*0.30);
-        int rocketWidth=GameLoad.getImages("weapon.rocket").get(0).getIconWidth();
-        int rocketHeight=GameLoad.getImages("weapon.rocket").get(0).getIconHeight();
+        ImageIcon rocketFrame=GameLoad.getImage("weapon.rocket");
+        int rocketWidth=rocketFrame.getIconWidth();
+        int rocketHeight=rocketFrame.getIconHeight();
         int effectWidth=GameLoad.getImages("effect.muzzle").get(0).getIconWidth();
         int effectHeight=GameLoad.getImages("effect.muzzle").get(0).getIconHeight();
         ElementManager manager=ElementManager.getManager();
-        manager.addElement(new Rocket(direction>0 ? muzzleX : muzzleX-rocketWidth,
-                muzzleY-rocketHeight/2,direction,getAttack()),GameElement.ENEMYFILE);
+        ElementObj player=findPlayer();
+        Rocket rocket;
+        if(player==null) {
+            rocket=new Rocket(direction>0 ? muzzleX : muzzleX-rocketWidth,
+                    muzzleY-rocketHeight/2,direction,getAttack());
+        }else {
+            java.awt.Rectangle target=player.getRectangle();
+            rocket=Rocket.aimed(muzzleX,muzzleY,
+                    (int)Math.round(target.getCenterX()),
+                    (int)Math.round(target.getCenterY()),getAttack());
+        }
+        manager.addElement(rocket,GameElement.ENEMYFILE);
         manager.addElement(new MuzzleEffect(direction>0 ? muzzleX : muzzleX-effectWidth,
                 muzzleY-effectHeight/2,direction),GameElement.EFFECT);
     }

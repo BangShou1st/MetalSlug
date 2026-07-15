@@ -16,11 +16,11 @@ public class KnifeEnemy extends AbstractEnemy {
     private static final int MOVE_INTERVAL=2; //移动动画换帧间隔
     private static final int ATTACK_INTERVAL=2; //攻击动画换帧间隔
     private static final int DEATH_INTERVAL=2; //死亡动画换帧间隔
-    private static final double MOVE_SPEED=2.5; //水平移动速度
-    private static final int DETECT_RANGE=240; //发现玩家范围
+    private static final double MOVE_SPEED=3.0; //水平移动速度
+    private static final int DETECT_RANGE=420; //发现玩家范围
     private static final int ATTACK_RANGE=55; //开始近战范围
     private static final int ATTACK_FRAME=2; //近战判定释放帧
-    private static final int ATTACK_COOLDOWN_FRAMES=30; //攻击冷却逻辑帧数
+    private static final int ATTACK_COOLDOWN_FRAMES=25; //攻击冷却逻辑帧数
 
     //供 GameLoad 通过反射创建模板
     public KnifeEnemy() {
@@ -60,6 +60,14 @@ public class KnifeEnemy extends AbstractEnemy {
     //获取攻击冷却逻辑帧数
     @Override
     protected int getAttackCooldownFrames() { return ATTACK_COOLDOWN_FRAMES; }
+
+    //刀兵只要存在存活玩家就持续主动追击
+    @Override
+    protected boolean shouldAlwaysEngage() { return true; }
+
+    //刀兵不会主动后退
+    @Override
+    protected int getRetreatRange() { return 0; }
 
     //在朝向一侧创建一个短寿命近战判定
     @Override

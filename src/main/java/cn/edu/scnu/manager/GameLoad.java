@@ -8,12 +8,10 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
-/**
- * 加载器（工具：用于读取配置文件的工具）工具类，大多提供的是static方法
- */
+/** 加载配置、图片和游戏对象。 */
 
 public class GameLoad {
-    //得到资源管理器
+    //资源管理器
     private static final ElementManager EM=ElementManager.getManager();
 
     private static final String TEXT_PATH="text/";
@@ -29,9 +27,7 @@ public class GameLoad {
     private static Map<String,Class<?>> objMap=new HashMap<>();
 
 
-    /**
-     * 读取配置文件
-     */
+    //读取基础配置
     private static Properties loadPro(String fileName) {
         Properties properties=new Properties();
         try(InputStream in=GameLoad.class.getClassLoader()
@@ -48,12 +44,18 @@ public class GameLoad {
         gamePro=loadPro("GameData.properties");
     }
 
-    //读取字符串配置
+    //读取必需的字符串配置
     public static String getString(String key) {
+        //首次读取时加载游戏配置
         if(gamePro.isEmpty()) {
             loadGameData();
         }
-        return gamePro.getProperty(key);
+        String value=gamePro.getProperty(key);
+        //缺少必需配置时直接报错
+        if(value==null) {
+            throw new IllegalArgumentException("缺少游戏配置："+key);
+        }
+        return value.trim();
     }
 
     //读取整数配置
@@ -66,10 +68,9 @@ public class GameLoad {
         return Boolean.parseBoolean(getString(key));
     }
 
-    /**
-     * 加载全部图片
-     */
+    //加载全部图片
     public static void loadImg() {
+        //图片已经加载时直接复用缓存
         if(imgLoaded) {
             return;
         }
@@ -78,7 +79,8 @@ public class GameLoad {
         for(String key:imgPro.stringPropertyNames()) {
             String[] data=imgPro.getProperty(key).split(",");
             String path=data[0].trim();
-            if(data.length==1) { //单张图片
+            //按配置加载单图或动画序列
+            if(data.length==1) {
                 imgMap.put(key,loadIcon(path));
             }else {
                 int count=Integer.parseInt(data[1].trim());
@@ -94,6 +96,7 @@ public class GameLoad {
 
         java.net.URL url=GameLoad.class.getClassLoader().getResource(path);
 
+        //资源路径不存在时停止加载
         if(url==null) {
             throw new RuntimeException("图片不存在："+path);
         }
@@ -113,20 +116,32 @@ public class GameLoad {
 
     //获取单张图片
     public static ImageIcon getImage(String key) {
-        return imgMap.get(key);
+        loadImg();
+        ImageIcon image=imgMap.get(key);
+        if(image==null) {
+            throw new IllegalArgumentException("缺少单张图片配置："+key);
+        }
+        return image;
     }
 
     //获取图片序列
     public static List<ImageIcon> getImages(String key) {
-        return imgMaps.get(key);
+        loadImg();
+        List<ImageIcon> images=imgMaps.get(key);
+        if(images==null) {
+            throw new IllegalArgumentException("缺少图片序列配置："+key);
+        }
+        return images;
     }
 
     //读取对象配置
     public static void loadObj() {
+        //对象配置已经加载时直接复用
         if(!objMap.isEmpty()) {
             return;
         }
         Properties objPro=loadPro("obj.properties");
+        //把对象键映射到对应类型
         for(String key:objPro.stringPropertyNames()) {
             try {
                 String className=objPro.getProperty(key);
@@ -140,11 +155,16 @@ public class GameLoad {
     //根据配置创建对象
     public static ElementObj getObj(String key) {
         loadObj();
+        Class<?> clazz=objMap.get(key);
+        //缺少对象映射时直接报错
+        if(clazz==null) {
+            throw new IllegalArgumentException("缺少对象配置："+key);
+        }
+        //通过无参构造创建对象模板
         try {
-            Class<?> clazz=objMap.get(key);
             return (ElementObj)clazz.getDeclaredConstructor().newInstance();
         }catch (Exception e) {
-            throw new RuntimeException(key+"对象创建失败");
+            throw new RuntimeException(key+"对象创建失败",e);
         }
     }
 

@@ -4,33 +4,30 @@ import cn.edu.scnu.element.ElementObj;
 
 import java.util.*;
 
-/**
- * @说明 本类是元素管理器，专门存储所有的元素，同时，提供方法
- *       给予视图和控制获取数据
- * 管理器是视图和控制要访问，管理器就必须只有一个，单例模式
- */
+/** 按类型集中管理游戏元素的单例。 */
 
 public class ElementManager {
 
     private final Map<GameElement, List<ElementObj>> gameElements; //保存所有游戏元素
 
-    private static ElementManager EM=null; //懒汉式单例
+    private static ElementManager EM=null; //单例实例
 
     private ElementManager() {
         gameElements = new HashMap<>();
         init();
     }
 
-    //初始化游戏元素分类
+    //初始化元素分类
     private void init() {
-        for (GameElement ge : GameElement.values()) { //将每种元素集合都放入到map中
+        for (GameElement ge : GameElement.values()) {
             gameElements.put(ge,Collections.synchronizedList(new ArrayList<ElementObj>()));
         }
     }
 
     //获取唯一的元素管理器
     public static synchronized ElementManager getManager() {
-        if (EM == null) {   //空值判定
+        //首次访问时创建单例
+        if (EM == null) {
             EM=new ElementManager();
         }
         return EM;
@@ -44,34 +41,19 @@ public class ElementManager {
     //返回指定元素分类的线程安全只读快照
     public List<ElementObj> getElementSnapshot(GameElement ge) {
         List<ElementObj> elements=gameElements.get(ge);
+        //同步复制，避免绘制时遍历正在修改的列表
         synchronized(elements) {
             return new ArrayList<ElementObj>(elements);
         }
     }
 
-    //添加元素
     public void addElement(ElementObj obj,GameElement ge) {
-        gameElements.get(ge).add(obj); //添加对象到集合中，按key值进行存储
+        gameElements.get(ge).add(obj);
     }
 
-    //删除指定游戏元素
-    public boolean removeElement(ElementObj obj,GameElement ge) {
-        return gameElements.get(ge).remove(obj);
-    }
-
-    //清空指定类型的游戏元素
-    public void clearElement(GameElement ge) {
-        List<ElementObj> elements=gameElements.get(ge);
-        synchronized(elements) {
-            elements.clear();
-        }
-    }
-
-    /**
-     * 清空所有游戏元素
-     * 可在关卡切换或重新开始游戏时调用
-     */
+    /** 清空所有游戏元素。 */
     public void clearAll() {
+        //逐类清空当前关卡对象
         for (List<ElementObj> elements : gameElements.values()) {
             synchronized(elements) {
                 elements.clear();

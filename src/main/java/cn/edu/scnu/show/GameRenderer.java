@@ -19,6 +19,10 @@ import java.util.List;
  * 本类只计算绘制与按钮区域，不修改游戏流程状态。
  */
 public class GameRenderer {
+    private static final Rectangle LEVEL_ONE_SOURCE_BOUNDS=
+            new Rectangle(45,170,1545,330); //源图第一关整行区域
+    private static final Rectangle LEVEL_TWO_SOURCE_BOUNDS=
+            new Rectangle(45,528,1545,335); //源图第二关整行区域
     //当前鼠标命中的界面按钮
     public enum MenuButton {
         NONE, //没有命中按钮
@@ -57,6 +61,7 @@ public class GameRenderer {
     //根据当前游戏状态绘制对应画面
     public void draw(Graphics2D g,int panelWidth,int panelHeight,
                      MenuButton hoveredButton) {
+        //按游戏状态选择主画面
         switch(gameThread.getGameState()) {
             case MAIN_MENU:
                 drawMainMenu(g,panelWidth,panelHeight,hoveredButton);
@@ -75,38 +80,43 @@ public class GameRenderer {
 
     //根据当前状态和鼠标位置返回命中的按钮
     public MenuButton findButton(int x,int y,int panelWidth,int panelHeight) {
+        //不同界面使用各自的按钮区域
         switch(gameThread.getGameState()) {
             case MAIN_MENU:
                 return findMainMenuButton(x,y,panelWidth);
             case LEVEL_SELECT:
+                //检测返回和两个关卡区域
                 if(getBackButtonBounds().contains(x,y)) {
                     return MenuButton.BACK;
                 }
-                if(getLevelOneBounds(panelWidth).contains(x,y)) {
+                if(getLevelOneBounds(panelWidth,panelHeight).contains(x,y)) {
                     return MenuButton.LEVEL_ONE;
                 }
-                if(getLevelTwoBounds(panelWidth).contains(x,y)) {
+                if(getLevelTwoBounds(panelWidth,panelHeight).contains(x,y)) {
                     return MenuButton.LEVEL_TWO;
                 }
                 break;
             case CONTROLS:
+                //操作说明界面只检测返回按钮
                 if(getBackButtonBounds().contains(x,y)) {
                     return MenuButton.BACK;
                 }
                 break;
             case RUNNING:
+                //游戏中只检测设置按钮
                 if(getSettingsButtonBounds(panelWidth).contains(x,y)) {
                     return MenuButton.SETTINGS;
                 }
                 break;
             case PAUSED:
-                if(getBackButtonBounds().contains(x,y)) {
+                //暂停界面检测三个操作按钮
+                if(getSettingsOptionBounds(0,panelWidth).contains(x,y)) {
                     return MenuButton.RETURN_GAME;
                 }
-                if(getHomeButtonBounds(panelWidth).contains(x,y)) {
+                if(getSettingsOptionBounds(1,panelWidth).contains(x,y)) {
                     return MenuButton.HOME;
                 }
-                if(getSettingsExitButtonBounds(panelWidth).contains(x,y)) {
+                if(getSettingsOptionBounds(2,panelWidth).contains(x,y)) {
                     return MenuButton.EXIT_GAME;
                 }
                 break;
@@ -138,11 +148,14 @@ public class GameRenderer {
         drawHud(g,panelWidth);
 
         GameThread.GameState state=gameThread.getGameState();
+        //运行中显示设置按钮
         if(state==GameThread.GameState.RUNNING) {
             drawMenuButton(g,getSettingsButtonBounds(panelWidth),"设置",
                     hoveredButton==MenuButton.SETTINGS);
+        //暂停时覆盖设置界面
         }else if(state==GameThread.GameState.PAUSED) {
             drawSettings(g,panelWidth,panelHeight,hoveredButton);
+        //流程节点显示对应提示
         }else if(state==GameThread.GameState.START
                 || state==GameThread.GameState.FAILED
                 || state==GameThread.GameState.LEVEL_CLEAR
@@ -157,6 +170,7 @@ public class GameRenderer {
         try {
             worldGraphics.translate(-camera.getX(),-camera.getY());
             for(GameElement ge:GameElement.values()) {
+                //固定 UI 不随摄像机移动
                 if(ge==GameElement.UI) {
                     continue;
                 }
@@ -207,10 +221,10 @@ public class GameRenderer {
                     "A / D 或方向键：左右移动",
                     "W 或上方向键：跳跃",
                     "S 或下方向键：下蹲",
-                    "J：射击",
+                    "J：普通射击",
                     "K：投掷手雷",
                     "P：打开 / 关闭设置",
-                    "R：失败后重新开始",
+                    "R：发射火箭；失败界面重新开始",
                     "Esc：返回上一界面 / 打开设置"
             };
             int textY=210;
@@ -230,13 +244,16 @@ public class GameRenderer {
     private void drawLevelSelect(Graphics2D g,int panelWidth,int panelHeight,
                                  MenuButton hoveredButton) {
         ImageIcon background=GameLoad.getImage("ui.menu.levelSelect");
-        drawCoverImage(g,background.getImage(),panelWidth,panelHeight);
+        g.setColor(Color.BLACK);
+        g.fillRect(0,0,panelWidth,panelHeight);
+        Rectangle imageBounds=getLevelSelectImageBounds(panelWidth,panelHeight);
+        drawContainedImage(g,background.getImage(),imageBounds);
 
         Graphics2D levelGraphics=(Graphics2D)g.create();
         try {
-            drawLevelOption(levelGraphics,getLevelOneBounds(panelWidth),
+            drawLevelOption(levelGraphics,getLevelOneBounds(panelWidth,panelHeight),
                     MenuButton.LEVEL_ONE,"点击进入",hoveredButton);
-            drawLevelOption(levelGraphics,getLevelTwoBounds(panelWidth),
+            drawLevelOption(levelGraphics,getLevelTwoBounds(panelWidth,panelHeight),
                     MenuButton.LEVEL_TWO,"点击进入",hoveredButton);
         }finally {
             levelGraphics.dispose();
@@ -276,11 +293,11 @@ public class GameRenderer {
             overlay.dispose();
         }
 
-        drawMenuButton(g,getBackButtonBounds(),"返回游戏",
+        drawMenuButton(g,getSettingsOptionBounds(0,panelWidth),"返回游戏",
                 hoveredButton==MenuButton.RETURN_GAME);
-        drawMenuButton(g,getHomeButtonBounds(panelWidth),"回到主页",
+        drawMenuButton(g,getSettingsOptionBounds(1,panelWidth),"回到主页",
                 hoveredButton==MenuButton.HOME);
-        drawMenuButton(g,getSettingsExitButtonBounds(panelWidth),"退出游戏",
+        drawMenuButton(g,getSettingsOptionBounds(2,panelWidth),"退出游戏",
                 hoveredButton==MenuButton.EXIT_GAME);
     }
 
@@ -328,19 +345,58 @@ public class GameRenderer {
         g.drawImage(image,drawX,drawY,drawWidth,drawHeight,null);
     }
 
+    //计算图片保持宽高比并完整显示时的目标区域
+    private Rectangle getContainedImageBounds(Image image,int panelWidth,
+                                              int panelHeight) {
+        int imageWidth=image.getWidth(null);
+        int imageHeight=image.getHeight(null);
+        double scale=Math.min((double)panelWidth/imageWidth,
+                (double)panelHeight/imageHeight);
+        int drawWidth=(int)Math.round(imageWidth*scale);
+        int drawHeight=(int)Math.round(imageHeight*scale);
+        return new Rectangle((panelWidth-drawWidth)/2,
+                (panelHeight-drawHeight)/2,drawWidth,drawHeight);
+    }
+
+    //在目标区域完整绘制图片
+    private void drawContainedImage(Graphics2D g,Image image,Rectangle bounds) {
+        g.drawImage(image,bounds.x,bounds.y,bounds.width,bounds.height,null);
+    }
+
+    //获取关卡选择图片在当前面板中的完整显示区域
+    private Rectangle getLevelSelectImageBounds(int panelWidth,int panelHeight) {
+        Image image=GameLoad.getImage("ui.menu.levelSelect").getImage();
+        return getContainedImageBounds(image,panelWidth,panelHeight);
+    }
+
+    //将源图上的关卡区域映射到当前完整显示区域
+    private Rectangle mapSourceBounds(Rectangle sourceBounds,int sourceWidth,
+                                      int sourceHeight,Rectangle targetBounds) {
+        int x=targetBounds.x+(int)Math.round(sourceBounds.x
+                *(double)targetBounds.width/sourceWidth);
+        int y=targetBounds.y+(int)Math.round(sourceBounds.y
+                *(double)targetBounds.height/sourceHeight);
+        int width=(int)Math.round(sourceBounds.width
+                *(double)targetBounds.width/sourceWidth);
+        int height=(int)Math.round(sourceBounds.height
+                *(double)targetBounds.height/sourceHeight);
+        return new Rectangle(x,y,width,height);
+    }
+
     //在固定窗口坐标绘制玩家生命值和关卡信息
     private void drawHud(Graphics2D g,int panelWidth) {
         int hp=0;
         List<ElementObj> plays=em.getElementSnapshot(GameElement.PLAY);
+        //存在玩家时读取当前生命值
         if(!plays.isEmpty()) {
             hp=((Play)plays.get(0)).getHp();
         }
 
         Graphics2D hud=(Graphics2D)g.create();
         try {
-            hud.setFont(new Font("SansSerif",Font.BOLD,20));
-            drawHudText(hud,"HP: "+hp,20,30);
-            drawHudText(hud,"LEVEL: "+gameThread.getCurrentLevel(),20,55);
+            hud.setFont(new Font("Microsoft YaHei",Font.BOLD,20));
+            drawHudText(hud,"生命值："+hp,20,30);
+            drawHudText(hud,"第 "+gameThread.getCurrentLevel()+" 关",20,55);
             drawBossHud(hud,panelWidth);
         }finally {
             hud.dispose();
@@ -350,6 +406,7 @@ public class GameRenderer {
     //读取当前 Boss 并绘制固定在窗口顶部的生命条
     private void drawBossHud(Graphics2D g,int panelWidth) {
         List<ElementObj> bosses=em.getElementSnapshot(GameElement.BOSS);
+        //没有 Boss 时清空生命条记录
         if(bosses.isEmpty()) {
             trackedBoss=null;
             bossMaxHp=0;
@@ -357,13 +414,16 @@ public class GameRenderer {
         }
 
         RoleObj boss=(RoleObj)bosses.get(0);
+        //切换 Boss 时记录初始最大生命值
         if(trackedBoss!=boss) {
             trackedBoss=boss;
             bossMaxHp=boss.getHp();
         }
+        //生命值增长时同步更新上限
         if(boss.getHp()>bossMaxHp) {
             bossMaxHp=boss.getHp();
         }
+        //Boss 激活前不显示生命条
         if(boss instanceof AbstractBoss && !((AbstractBoss)boss).isActive()) {
             return;
         }
@@ -378,9 +438,9 @@ public class GameRenderer {
         int barY=22;
         int currentWidth=(int)((long)barWidth*currentHp/bossMaxHp);
 
-        g.setFont(new Font("SansSerif",Font.BOLD,14));
+        g.setFont(new Font("Microsoft YaHei",Font.BOLD,14));
         g.setColor(Color.WHITE);
-        g.drawString("BOSS",barX,barY-5);
+        g.drawString("首领生命",barX,barY-5);
         g.setColor(Color.BLACK);
         g.fillRect(barX-2,barY-2,barWidth+4,barHeight+4);
         g.setColor(Color.DARK_GRAY);
@@ -404,23 +464,24 @@ public class GameRenderer {
         g.drawString(text,x,y);
     }
 
-    //绘制关卡开始或失败状态提示
+    //绘制关卡开始、完成、失败或全部完成状态提示
     private void drawStateMessage(Graphics2D g,int panelWidth,int panelHeight,
                                   GameThread.GameState state) {
         String title;
         String message;
+        //按流程状态选择提示文字
         if(state==GameThread.GameState.START) {
-            title="METAL SLUG";
-            message="Press ENTER to Start";
+            title="任务开始";
+            message="按 Enter 开始任务";
         }else if(state==GameThread.GameState.LEVEL_CLEAR) {
-            title="MISSION COMPLETE";
-            message="Press ENTER for Next Mission";
+            title="任务完成";
+            message="按 Enter 进入下一关";
         }else if(state==GameThread.GameState.VICTORY) {
-            title="ALL MISSIONS COMPLETE";
-            message="Press ENTER to Main Menu";
+            title="全部任务完成";
+            message="按 Enter 返回主菜单";
         }else {
-            title="MISSION FAILED";
-            message="Press R to Restart";
+            title="任务失败";
+            message="按 R 重新开始";
         }
 
         Graphics2D overlay=(Graphics2D)g.create();
@@ -428,12 +489,35 @@ public class GameRenderer {
             overlay.setColor(new Color(0,0,0,150));
             overlay.fillRect(0,0,panelWidth,panelHeight);
             overlay.setColor(Color.WHITE);
-            overlay.setFont(new Font("SansSerif",Font.BOLD,42));
-            drawCenteredString(overlay,title,260,panelWidth);
-            overlay.setFont(new Font("SansSerif",Font.PLAIN,22));
-            drawCenteredString(overlay,message,310,panelWidth);
+            overlay.setFont(new Font("Microsoft YaHei",Font.BOLD,42));
+            drawCenteredString(overlay,title,190,panelWidth);
+            overlay.setFont(new Font("Microsoft YaHei",Font.PLAIN,22));
+            drawCenteredString(overlay,message,235,panelWidth);
+            //结束状态额外显示关卡统计
+            if(state!=GameThread.GameState.START) {
+                drawLevelSummary(overlay,panelWidth);
+            }
         }finally {
             overlay.dispose();
+        }
+    }
+
+    //在结果覆盖层中绘制当前关卡的五项轻量总结
+    private void drawLevelSummary(Graphics2D g,int panelWidth) {
+        String[] lines={
+                "第 "+gameThread.getCurrentLevel()+" 关",
+                "击败敌人："+gameThread.getLevelEnemyDefeated()+" / "
+                        +gameThread.getLevelEnemyTotal(),
+                "解救人质："+gameThread.getLevelHostageRescued()+" / "
+                        +gameThread.getLevelHostageTotal(),
+                "剩余生命："+gameThread.getPlayerRemainingHp(),
+                "任务耗时："+gameThread.getLevelElapsedSeconds()+" 秒"
+        };
+        g.setFont(new Font("Microsoft YaHei",Font.PLAIN,21));
+        int y=295;
+        for(String line:lines) {
+            drawCenteredString(g,line,y,panelWidth);
+            y+=32;
         }
     }
 
@@ -454,13 +538,17 @@ public class GameRenderer {
     }
 
     //获取关卡选择中的第一关区域
-    private Rectangle getLevelOneBounds(int panelWidth) {
-        return new Rectangle(35,105,panelWidth-70,195);
+    private Rectangle getLevelOneBounds(int panelWidth,int panelHeight) {
+        ImageIcon source=GameLoad.getImage("ui.menu.levelSelect");
+        return mapSourceBounds(LEVEL_ONE_SOURCE_BOUNDS,source.getIconWidth(),
+                source.getIconHeight(),getLevelSelectImageBounds(panelWidth,panelHeight));
     }
 
     //获取关卡选择中的第二关区域
-    private Rectangle getLevelTwoBounds(int panelWidth) {
-        return new Rectangle(35,325,panelWidth-70,190);
+    private Rectangle getLevelTwoBounds(int panelWidth,int panelHeight) {
+        ImageIcon source=GameLoad.getImage("ui.menu.levelSelect");
+        return mapSourceBounds(LEVEL_TWO_SOURCE_BOUNDS,source.getIconWidth(),
+                source.getIconHeight(),getLevelSelectImageBounds(panelWidth,panelHeight));
     }
 
     //获取左上角返回按钮区域
@@ -473,13 +561,12 @@ public class GameRenderer {
         return new Rectangle(panelWidth-120,20,100,42);
     }
 
-    //获取设置界面的回到主页按钮区域
-    private Rectangle getHomeButtonBounds(int panelWidth) {
-        return new Rectangle((panelWidth-250)/2,285,250,54);
-    }
-
-    //获取设置界面的退出游戏按钮区域
-    private Rectangle getSettingsExitButtonBounds(int panelWidth) {
-        return new Rectangle((panelWidth-250)/2,355,250,54);
+    //获取暂停设置界面指定序号的中央按钮区域
+    private Rectangle getSettingsOptionBounds(int index,int panelWidth) {
+        int buttonWidth=250;
+        int buttonHeight=54;
+        int x=(panelWidth-buttonWidth)/2;
+        int y=215+index*70;
+        return new Rectangle(x,y,buttonWidth,buttonHeight);
     }
 }

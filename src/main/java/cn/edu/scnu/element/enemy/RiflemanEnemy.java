@@ -9,7 +9,7 @@ import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.ImageIcon;
 
-//使用固定配置字符串创建并驱动步枪兵行为
+//使用普通子弹攻击的步枪兵
 public class RiflemanEnemy extends AbstractEnemy {
     private static final String MOVE_ANIMATION="enemy.rifleman.move"; //步枪兵移动动画键
     private static final String ATTACK_ANIMATION="enemy.rifleman.attack"; //步枪兵攻击动画键
@@ -18,16 +18,16 @@ public class RiflemanEnemy extends AbstractEnemy {
     private static final int ATTACK_INTERVAL=2; //攻击动画每两帧切换一次
     private static final int DEATH_INTERVAL=2; //死亡动画每两帧切换一次
     private static final double MOVE_SPEED=1.5; //步枪兵水平移动速度
-    private static final int DETECT_RANGE=400; //步枪兵发现玩家的水平范围
-    private static final int ATTACK_RANGE=300; //步枪兵开始攻击的水平范围
+    private static final int DETECT_RANGE=900; //步枪兵在视口内发现玩家的水平范围
+    private static final int ATTACK_RANGE=900; //步枪兵在视口内开始攻击的水平范围
     private static final int ATTACK_FRAME=2; //步枪兵释放攻击的动画帧
     private static final int ATTACK_COOLDOWN_FRAMES=40; //两次攻击之间的冷却逻辑帧数
 
-    //供 GameLoad 通过反射创建步枪兵模板
+    //供 GameLoad 反射创建模板
     public RiflemanEnemy() {
     }
 
-    //使用已加载的移动首帧和配置数据创建步枪兵实体
+    //创建步枪兵
     private RiflemanEnemy(int x, int y, ImageIcon icon, int hp, int attack,
                           int patrolMinX, int patrolMaxX) {
         super(x,y,icon,hp,attack,GameLoad.getInt("sprite.enemy.rifleman.scalePercent"));
@@ -47,7 +47,7 @@ public class RiflemanEnemy extends AbstractEnemy {
                 data[0],data[1],icon,data[2],data[3],data[4],data[5]);
     }
 
-    //根据当前状态复用公共动画播放器切换图片
+    //根据状态播放动画
     @Override
     protected void updateImage(long gameTime) {
         switch (state) {
@@ -66,19 +66,25 @@ public class RiflemanEnemy extends AbstractEnemy {
         }
     }
 
-    //获取步枪兵的唯一攻击触发帧
+    //获取攻击释放帧
     @Override
     protected int getAttackFrame() {
         return ATTACK_FRAME;
     }
 
-    //获取步枪兵攻击结束后的冷却逻辑帧数
+    //获取攻击冷却
     @Override
     protected int getAttackCooldownFrames() {
         return ATTACK_COOLDOWN_FRAMES;
     }
 
-    //在唯一攻击帧创建步枪兵子弹和枪口特效
+    //玩家贴脸时保持步枪兵的中距离射击空间
+    @Override
+    protected int getRetreatRange() {
+        return 160;
+    }
+
+    //创建子弹和枪口特效
     @Override
     protected void releaseAttack() {
         java.awt.Rectangle bounds=getCurrentDrawBounds();

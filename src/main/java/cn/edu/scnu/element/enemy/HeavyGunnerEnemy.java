@@ -18,8 +18,8 @@ public class HeavyGunnerEnemy extends AbstractEnemy {
     private static final int ATTACK_INTERVAL=2; //攻击动画换帧间隔
     private static final int DEATH_INTERVAL=2; //死亡动画换帧间隔
     private static final double MOVE_SPEED=0.8; //水平移动速度
-    private static final int DETECT_RANGE=380; //发现玩家范围
-    private static final int ATTACK_RANGE=300; //开始攻击范围
+    private static final int DETECT_RANGE=900; //在视口内发现玩家的水平范围
+    private static final int ATTACK_RANGE=900; //在视口内开始攻击的水平范围
     private static final int ATTACK_FRAME=1; //子弹释放帧
     private static final int ATTACK_COOLDOWN_FRAMES=80; //攻击冷却逻辑帧数
 
@@ -61,6 +61,10 @@ public class HeavyGunnerEnemy extends AbstractEnemy {
     //获取攻击冷却逻辑帧数
     @Override
     protected int getAttackCooldownFrames() { return ATTACK_COOLDOWN_FRAMES; }
+
+    //冷却期间玩家过近时为三连发拉开距离
+    @Override
+    protected int getRetreatRange() { return 170; }
 
     //每次关键帧创建一颗敌方子弹和一次枪口特效
     @Override

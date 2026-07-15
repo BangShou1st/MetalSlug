@@ -2,9 +2,7 @@ package cn.edu.scnu.element;
 
 import javax.swing.*;
 
-/**
- * 战斗角色父类    玩家、敌人和Boss继承本类
- */
+/** 玩家、敌人和 Boss 的战斗属性基类。 */
 public abstract class RoleObj extends ElementObj {
 
     private int hp=1;       //生命值
@@ -23,6 +21,7 @@ public abstract class RoleObj extends ElementObj {
     @Override
     public void hurt(int damage) {
         hp-=damage;
+        //生命归零后标记为失效
         if(hp<=0) {
             hp=0;
             setLive(false);

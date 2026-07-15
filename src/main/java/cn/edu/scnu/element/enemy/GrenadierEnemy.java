@@ -17,8 +17,8 @@ public class GrenadierEnemy extends AbstractEnemy {
     private static final int ATTACK_INTERVAL=3; //攻击动画换帧间隔
     private static final int DEATH_INTERVAL=2; //死亡动画换帧间隔
     private static final double MOVE_SPEED=1.2; //水平移动速度
-    private static final int DETECT_RANGE=350; //发现玩家范围
-    private static final int ATTACK_RANGE=280; //开始攻击范围
+    private static final int DETECT_RANGE=900; //在视口内发现玩家的水平范围
+    private static final int ATTACK_RANGE=900; //在视口内开始投掷手雷的水平范围
     private static final int ATTACK_FRAME=3; //手雷释放帧
     private static final int ATTACK_COOLDOWN_FRAMES=55; //攻击冷却逻辑帧数
 
@@ -61,14 +61,28 @@ public class GrenadierEnemy extends AbstractEnemy {
     @Override
     protected int getAttackCooldownFrames() { return ATTACK_COOLDOWN_FRAMES; }
 
+    //玩家过近时退回适合投掷的中距离
+    @Override
+    protected int getRetreatRange() { return 175; }
+
     //在投掷关键帧创建一枚使用当前地图地面的敌方手雷
     @Override
     protected void releaseAttack() {
         java.awt.Rectangle bounds=getCurrentDrawBounds();
-        int direction=facingRight ? 1 : -1;
         int releaseX=bounds.x+bounds.width/2;
         int releaseY=bounds.y+bounds.height/5;
+        ElementObj player=findPlayer();
+        Grenade grenade;
+        if(player==null) {
+            int direction=facingRight ? 1 : -1;
+            grenade=new Grenade(releaseX,releaseY,direction,getAttack());
+        }else {
+            java.awt.Rectangle target=player.getRectangle();
+            grenade=Grenade.aimed(releaseX,releaseY,
+                    (int)Math.round(target.getCenterX()),
+                    (int)Math.round(target.getCenterY()),getAttack());
+        }
         ElementManager.getManager().addElement(
-                new Grenade(releaseX,releaseY,direction,getAttack()),GameElement.ENEMYFILE);
+                grenade,GameElement.ENEMYFILE);
     }
 }

@@ -18,8 +18,6 @@ public class TankBoss extends AbstractBoss {
     private static final int ATTACK_INTERVAL=3; //攻击动画换帧间隔
     private static final int ATTACK_FRAME=2; //炮弹释放帧
     private static final int ATTACK_COOLDOWN_FRAMES=80; //攻击冷却逻辑帧数
-    private static final int ACTIVATION_RANGE=500; //玩家触发战斗的水平范围
-    private static final int ATTACK_RANGE=420; //Boss 开始开炮的水平范围
 
     //供 GameLoad 通过反射创建模板
     public TankBoss() {
@@ -28,8 +26,6 @@ public class TankBoss extends AbstractBoss {
     //使用待机首帧和配置数据创建坦克 Boss
     private TankBoss(int x,int y,ImageIcon icon,int hp,int attack) {
         super(x,y,icon,hp,attack,GameLoad.getInt("sprite.boss.tank.scalePercent"));
-        activationRange=ACTIVATION_RANGE;
-        attackRange=ATTACK_RANGE;
     }
 
     //按 x,y,hp,attack 格式创建坦克 Boss

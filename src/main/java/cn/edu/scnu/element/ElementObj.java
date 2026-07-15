@@ -9,9 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * @说明 所有元素的基类
- */
+/** 所有游戏元素的基类。 */
 
 public abstract class ElementObj {
     private static final Map<ImageIcon,Rectangle> OPAQUE_BOUNDS_CACHE=
@@ -21,9 +19,9 @@ public abstract class ElementObj {
     private int w;
     private int h;
     private ImageIcon icon;
-    private boolean live = true; //生存状态 true 代表存在，false代表死亡
+    private boolean live = true; //是否仍在游戏中，存活
 
-    //动画播放数据，每个元素都有自己独立的播放进度
+    //当前动画的播放进度
     private int imageIndex=0;
     private long imageTime=0;
     private String imageKey="";
@@ -31,9 +29,6 @@ public abstract class ElementObj {
 
     public ElementObj() {}
 
-    /**
-     * @说明 带参数的构造方法;可以由子类传输数据到父类
-     */
     public ElementObj(int x, int y, int w, int h, ImageIcon icon) {
         this.x = x;
         this.y = y;
@@ -42,33 +37,18 @@ public abstract class ElementObj {
         this.icon = icon;
     }
 
-    /**
-     * @param g 画笔 用于进行绘画
-     * @说明 抽象方法，显示元素
-     */
+    /** 绘制元素。 */
     public abstract void showElement(Graphics g);
 
-    /**
-     * @param bl  点击的类型true代表按下，false代表松开
-     * @param key 代表触发的键盘的code值
-     * @说明 使用父类定义接收键盘事件的方法
-     * 只有需要实现键盘监听的子类，重写这个方法(约定)
-     * @说明 方式2：使用接口的方式;使用接口方式需要在监听类进行类型转换
-     */
-    //这个方法不是强制必须重写的
+    /** 接收按键状态，需要输入的元素可重写。 */
     public void keyClick(boolean bl, int key) {
     }
 
-    /**
-     * @说明 移动方法;需要移动的子类，请重写实现这个方法
-     */
+    /** 更新位置，需要移动的元素可重写。 */
     protected void move() {
     }
 
-    /**
-     * @设计模式 模板模式;在模板模式中定义  对象执行方法的先后顺序，由子类选择性重写方法
-     * 1.移动     2.换装    3.子弹发射
-     */
+    /** 按移动、动画、生成对象的顺序更新元素。 */
     public final void model(long gameTime) {
         move();
         updateImage(gameTime);
@@ -90,10 +70,12 @@ public abstract class ElementObj {
 
         List<ImageIcon> images= GameLoad.getImages(key);
 
+        //动画资源为空时停止播放
         if(images==null || images.isEmpty()) {
             throw new RuntimeException("动画不存在："+key);
         }
 
+        //换帧间隔至少为一帧
         if(interval<1) {
             interval=1;
         }
@@ -105,9 +87,11 @@ public abstract class ElementObj {
             imageTime=gameTime;
             animationEnd=false;
         }
+        //达到间隔后切换下一帧
         if(gameTime-imageTime>=interval) {
             imageTime=gameTime;
             imageIndex++;
+            //到达末帧后循环或停留
             if(imageIndex>=images.size()) {
                 if(loop) {
                     imageIndex=0;
@@ -154,6 +138,7 @@ public abstract class ElementObj {
         int minY=height;
         int maxX=-1;
         int maxY=-1;
+        //扫描所有非透明像素
         for(int y=0;y<height;y++) {
             for(int x=0;x<width;x++) {
                 if((image.getRGB(x,y)>>>24)!=0) {
@@ -180,6 +165,7 @@ public abstract class ElementObj {
         Rectangle opaque=getOpaqueBounds(frame);
         double scale=scalePercent/100.0;
         double opaqueCenter=opaque.x+opaque.width/2.0;
+        //镜像时同步翻转透明区域中心
         if(mirrored) {
             opaqueCenter=frame.getIconWidth()-opaqueCenter;
         }
@@ -195,6 +181,7 @@ public abstract class ElementObj {
     protected void drawFootAnchoredFrame(Graphics g,ImageIcon frame,
                                          int scalePercent,boolean mirrored) {
         Rectangle bounds=getFootAnchoredDrawBounds(frame,scalePercent,mirrored);
+        //朝左时水平镜像绘制
         if(mirrored) {
             g.drawImage(frame.getImage(),bounds.x+bounds.width,bounds.y,
                     -bounds.width,bounds.height,null);
@@ -204,8 +191,8 @@ public abstract class ElementObj {
         }
     }
 
-    //死亡方法 给子类继承的
-    public void die(){ //死亡也是一个对象
+    //死亡时的扩展入口
+    public void die(){
 
     }
 
@@ -213,19 +200,12 @@ public abstract class ElementObj {
         return null;
     }
 
-    /**
-     * @说明 本方法返回元素的碰撞矩形对象(实时返回)
-     */
+    /** 返回当前碰撞区域。 */
     public Rectangle getRectangle() {
-        //可以将这个数据进行处理(碰撞面积)
         return new Rectangle(x,y,w,h);
     }
 
-    /**
-     * @说明 碰撞方法
-     * 一个是this对象一个是传入值obj
-     * boolean返回true 说明有碰撞，返回false说明没有碰撞
-     */
+    /** 判断是否与指定元素碰撞。 */
     public boolean pk(ElementObj obj) {
         return this.getRectangle().intersects(obj.getRectangle());
     }

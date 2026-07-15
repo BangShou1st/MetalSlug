@@ -18,8 +18,8 @@ public class BazookaEnemy extends AbstractEnemy {
     private static final int ATTACK_INTERVAL=3; //攻击动画换帧间隔
     private static final int DEATH_INTERVAL=2; //死亡动画换帧间隔
     private static final double MOVE_SPEED=1.0; //水平移动速度
-    private static final int DETECT_RANGE=450; //发现玩家范围
-    private static final int ATTACK_RANGE=350; //开始攻击范围
+    private static final int DETECT_RANGE=900; //在视口内发现玩家的水平范围
+    private static final int ATTACK_RANGE=900; //在视口内开始攻击的水平范围
     private static final int ATTACK_FRAME=2; //火箭释放帧
     private static final int ATTACK_COOLDOWN_FRAMES=60; //攻击冷却逻辑帧数
 
@@ -63,6 +63,10 @@ public class BazookaEnemy extends AbstractEnemy {
     @Override
     protected int getAttackCooldownFrames() { return ATTACK_COOLDOWN_FRAMES; }
 
+    //玩家过近时为火箭飞行留出安全距离
+    @Override
+    protected int getRetreatRange() { return 230; }
+
     //创建一枚敌方 Rocket 和一次枪口特效
     @Override
     protected void releaseAttack() {
@@ -70,13 +74,24 @@ public class BazookaEnemy extends AbstractEnemy {
         int direction=facingRight ? 1 : -1;
         int muzzleX=facingRight ? bounds.x+(int)(bounds.width*0.98) : bounds.x+(int)(bounds.width*0.02);
         int muzzleY=bounds.y+(int)(bounds.height*0.28);
-        int rocketWidth=GameLoad.getImages("weapon.rocket").get(0).getIconWidth();
-        int rocketHeight=GameLoad.getImages("weapon.rocket").get(0).getIconHeight();
+        ImageIcon rocketFrame=GameLoad.getImage("weapon.rocket");
+        int rocketWidth=rocketFrame.getIconWidth();
+        int rocketHeight=rocketFrame.getIconHeight();
         int effectWidth=GameLoad.getImages("effect.muzzle").get(0).getIconWidth();
         int effectHeight=GameLoad.getImages("effect.muzzle").get(0).getIconHeight();
         ElementManager manager=ElementManager.getManager();
-        manager.addElement(new Rocket(direction>0 ? muzzleX : muzzleX-rocketWidth,
-                muzzleY-rocketHeight/2,direction,getAttack()),GameElement.ENEMYFILE);
+        ElementObj player=findPlayer();
+        Rocket rocket;
+        if(player==null) {
+            rocket=new Rocket(direction>0 ? muzzleX : muzzleX-rocketWidth,
+                    muzzleY-rocketHeight/2,direction,getAttack());
+        }else {
+            java.awt.Rectangle target=player.getRectangle();
+            rocket=Rocket.aimed(muzzleX,muzzleY,
+                    (int)Math.round(target.getCenterX()),
+                    (int)Math.round(target.getCenterY()),getAttack());
+        }
+        manager.addElement(rocket,GameElement.ENEMYFILE);
         manager.addElement(new MuzzleEffect(direction>0 ? muzzleX : muzzleX-effectWidth,
                 muzzleY-effectHeight/2,direction),GameElement.EFFECT);
     }

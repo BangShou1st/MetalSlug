@@ -10,23 +10,15 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/**
- * @说明 监听类，用于监听用户的操作 KeyListener
- */
+/** 处理游戏键盘输入。 */
 
 public class GameListener implements KeyListener {
     private ElementManager em=ElementManager.getManager();
-    private GameThread gameThread; //处理开始、暂停和重新开始的游戏线程
+    private GameThread gameThread; //游戏流程线程
 
-    /**
-     * 通过一个集合来记录所有按下的键，如果重复触发，就直接结束
-     * 同时，第1次按下，记录到集合中，第2次判定集合中否有。
-     * 松开就直接删除集合中的记录。
-     * set集合
-     */
+    //记录已按下的键，避免系统重复触发按键事件
     private Set<Integer> set=new HashSet<Integer>();
 
-    //注入需要接收全局按键的游戏线程
     public void setGameThread(GameThread gameThread) {
         this.gameThread=gameThread;
     }
@@ -34,63 +26,72 @@ public class GameListener implements KeyListener {
     @Override
     public void keyTyped(KeyEvent e) {
     }
-    /**
-     * 按下：左37 上38 右39 下40
-     * 实现主角的移动
-     */
+
     @Override
     public void keyPressed(KeyEvent e) {
-        //System.out.println("keyPressed"+e.getKeyCode());
         int key=e.getKeyCode();
         if(!set.add(key)){ //同一个按键只处理第一次按下
             return;
         }
+        //Enter 启动游戏
         if(key==KeyEvent.VK_ENTER) {
             gameThread.startGame();
             return;
         }
+        //P 暂停或继续游戏
         if(key==KeyEvent.VK_P) {
             gameThread.togglePause();
             return;
         }
+        //失败后按 R 重新开始
         if(key==KeyEvent.VK_R) {
-            gameThread.restartLevel();
-            return;
+            if(gameThread.getGameState()==GameThread.GameState.FAILED) {
+                gameThread.restartLevel();
+                return;
+            }
+            //非运行状态不处理玩家武器切换
+            if(gameThread.getGameState()!=GameThread.GameState.RUNNING) {
+                return;
+            }
         }
+        //Esc 返回或退出当前界面
         if(key==KeyEvent.VK_ESCAPE) {
             gameThread.handleEscape();
             return;
         }
-        //拿到玩家集合
+        //非运行状态不处理玩家输入
+        if(gameThread.getGameState()!=GameThread.GameState.RUNNING) {
+            return;
+        }
+        //把按键转发给所有玩家对象
         List<ElementObj> play=em.getElementSnapshot(GameElement.PLAY);
         for(ElementObj obj: play){
             obj.keyClick(true,key);
         }
     }
-    /**
-     * 松开
-     */
+
     @Override
     public void keyReleased(KeyEvent e) {
-        //System.out.println("keyReleased"+e.getKeyCode());
         int key=e.getKeyCode();
+        //忽略没有记录的松键事件
         if(!set.remove(key)){
             return;
         }
+        //全局按键不交给玩家处理
         if(isGlobalKey(key)) {
             return;
         }
+        //把松键状态转发给所有玩家对象
         List<ElementObj> play=em.getElementSnapshot(GameElement.PLAY);
         for(ElementObj obj: play){
             obj.keyClick(false,key);
         }
     }
 
-    //判断按键是否只用于控制全局游戏流程
+    //全局按键不转发给玩家对象
     private boolean isGlobalKey(int key) {
         return key==KeyEvent.VK_ENTER
                 || key==KeyEvent.VK_P
-                || key==KeyEvent.VK_R
                 || key==KeyEvent.VK_ESCAPE;
     }
 }

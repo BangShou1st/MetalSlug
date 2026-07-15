@@ -1,19 +1,14 @@
 package cn.edu.scnu.element.weapon;
 
 import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.manager.GameAudio;
 
 import java.awt.*;
 
-/**
- * 近战判定框，短暂存在后自动消失，供 C 的刀兵等近战敌人使用。
- * <p>
- * 无绘制内容（{{@code showElement}} 为空），碰撞框由 {@link #getRectangle()} 提供。
- *
- * @author B
- */
+/** 短暂存在且不绘制的近战判定框。 */
 public class MeleeHitBox extends ElementObj {
     private int attack;
-    /** 剩余存活帧数，2 帧足够覆盖一次碰撞检测周期 */
+    /** 剩余存活帧数。 */
     private int life;
 
     public MeleeHitBox(int x, int y, int attack) {
@@ -25,6 +20,7 @@ public class MeleeHitBox extends ElementObj {
         super(x,y,width,height,null);
         this.attack = attack;
         this.life = 2;
+        GameAudio.playIfIdle("weapon.melee");
     }
 
     @Override
@@ -34,6 +30,7 @@ public class MeleeHitBox extends ElementObj {
     @Override
     protected void move() {
         life--;
+        //存活帧数用尽后移除判定框
         if (life <= 0) {
             setLive(false);
         }
