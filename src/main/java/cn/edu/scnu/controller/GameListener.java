@@ -62,7 +62,7 @@ public class GameListener implements KeyListener {
             return;
         }
         //拿到玩家集合
-        List<ElementObj> play=em.getElementByKey(GameElement.PLAY);
+        List<ElementObj> play=em.getElementSnapshot(GameElement.PLAY);
         for(ElementObj obj: play){
             obj.keyClick(true,key);
         }
@@ -80,7 +80,7 @@ public class GameListener implements KeyListener {
         if(isGlobalKey(key)) {
             return;
         }
-        List<ElementObj> play=em.getElementByKey(GameElement.PLAY);
+        List<ElementObj> play=em.getElementSnapshot(GameElement.PLAY);
         for(ElementObj obj: play){
             obj.keyClick(false,key);
         }

@@ -24,7 +24,7 @@ public class ElementManager {
     //初始化游戏元素分类
     private void init() {
         for (GameElement ge : GameElement.values()) { //将每种元素集合都放入到map中
-            gameElements.put(ge,new ArrayList<ElementObj>());
+            gameElements.put(ge,Collections.synchronizedList(new ArrayList<ElementObj>()));
         }
     }
 
@@ -36,14 +36,17 @@ public class ElementManager {
         return EM;
     }
 
-    //获取全部游戏元素
-    public Map<GameElement, List<ElementObj>> getGameElements() {
-        return gameElements;
-    }
-
-    //依据key返回list集合，取出某一类元素
+    //返回实时列表，仅供游戏逻辑层更新、碰撞和装配使用
     public List<ElementObj> getElementByKey(GameElement ge) {
         return gameElements.get(ge);
+    }
+
+    //返回指定元素分类的线程安全只读快照
+    public List<ElementObj> getElementSnapshot(GameElement ge) {
+        List<ElementObj> elements=gameElements.get(ge);
+        synchronized(elements) {
+            return new ArrayList<ElementObj>(elements);
+        }
     }
 
     //添加元素
@@ -58,7 +61,10 @@ public class ElementManager {
 
     //清空指定类型的游戏元素
     public void clearElement(GameElement ge) {
-            gameElements.get(ge).clear();
+        List<ElementObj> elements=gameElements.get(ge);
+        synchronized(elements) {
+            elements.clear();
+        }
     }
 
     /**
@@ -67,12 +73,17 @@ public class ElementManager {
      */
     public void clearAll() {
         for (List<ElementObj> elements : gameElements.values()) {
-            elements.clear();
+            synchronized(elements) {
+                elements.clear();
+            }
         }
     }
 
     //获取指定类型的元素数量
     public int size(GameElement gameElement) {
-        return gameElements.get(gameElement).size();
+        List<ElementObj> elements=gameElements.get(gameElement);
+        synchronized(elements) {
+            return elements.size();
+        }
     }
 }

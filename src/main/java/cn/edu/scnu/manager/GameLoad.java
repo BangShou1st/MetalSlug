@@ -14,13 +14,13 @@ import java.util.*;
 
 public class GameLoad {
     //得到资源管理器
-    private static ElementManager em=ElementManager.getManager();
+    private static final ElementManager EM=ElementManager.getManager();
 
     private static final String TEXT_PATH="text/";
     //单张图片
-    public static Map<String,ImageIcon> imgMap=new HashMap<>();
+    private static final Map<String,ImageIcon> imgMap=new HashMap<>();
     //序列图片
-    public static Map<String,List<ImageIcon>> imgMaps=new HashMap<>();
+    private static final Map<String,List<ImageIcon>> imgMaps=new HashMap<>();
     //全局配置
     private static Properties gamePro=new Properties();
     //图片是否已经加载
@@ -152,6 +152,6 @@ public class GameLoad {
     public static void loadPlay(String playStr) {
         ElementObj obj=getObj("play");
         ElementObj play=obj.createElement(playStr);
-        em.addElement(play,GameElement.PLAY);
+        EM.addElement(play,GameElement.PLAY);
     }
 }

@@ -17,7 +17,12 @@ public class MeleeHitBox extends ElementObj {
     private int life;
 
     public MeleeHitBox(int x, int y, int attack) {
-        super(x, y, 40, 30, null);
+        this(x,y,40,30,attack);
+    }
+
+    //按攻击者缩放后的身体尺寸创建近战判定框
+    public MeleeHitBox(int x,int y,int width,int height,int attack) {
+        super(x,y,width,height,null);
         this.attack = attack;
         this.life = 2;
     }

@@ -6,13 +6,15 @@ import cn.edu.scnu.manager.ElementManager;
 import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
+import java.awt.Graphics;
+
 /**
  * 火箭弹，3 帧循环动画，命中/死亡时在中心生成 ExplosionEffect。
  *
  * @author B
  */
 public class Rocket extends ProjectileObj {
-    private int vx;
+    private int vx; //火箭弹每帧的水平位移
     /**
      * 防止 die() 重复生成爆炸。
      * Rocket 的 die() 只被 moveAndUpdate() 调用一次（碰撞或越界二选一），
@@ -31,12 +33,24 @@ public class Rocket extends ProjectileObj {
         this.vx = dir * 8;
     }
 
+    //按照飞行方向绘制火箭弹，素材默认朝右
+    @Override
+    public void showElement(Graphics g) {
+        if(vx<0) {
+            g.drawImage(getIcon().getImage(),getX()+getW(),getY(),-getW(),getH(),null);
+        }else {
+            g.drawImage(getIcon().getImage(),getX(),getY(),getW(),getH(),null);
+        }
+    }
+
+    //按当前水平速度移动并检查世界边界
     @Override
     protected void move() {
         setX(getX() + vx);
         checkWorldBounds();
     }
 
+    //循环播放火箭弹三帧动画
     @Override
     protected void updateImage(long gameTime) {
         playAnimation("weapon.rocket", gameTime, 4, true);

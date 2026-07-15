@@ -42,7 +42,7 @@ public class Grenade extends ProjectileObj {
         this.preciseY = y;
         this.vx = dir * 5;
         this.vy = -4;   // 初始向上速度
-        this.fuse = 120; // 约 6 秒（60 帧/秒）
+        this.fuse = 120; // 约 6 秒（约 20 个逻辑帧/秒）
     }
 
     @Override
@@ -122,18 +122,12 @@ public class Grenade extends ProjectileObj {
         explode();
     }
 
-    /**
-     * 爆炸半径（像素），供 A 接入范围伤害。
-     * TODO: A 在 GameThread 中实现范围碰撞时使用此值
-     */
+    //爆炸半径（像素），供主线程执行范围伤害
     public int getBlastRadius() {
         return 80;
     }
 
-    /**
-     * 范围爆炸伤害，供 A 接入范围伤害。
-     * TODO: A 在 GameThread 中实现范围碰撞时使用此值
-     */
+    //范围爆炸伤害，供主线程执行范围伤害
     public int getBlastDamage() {
         return getAttack() * 2;
     }

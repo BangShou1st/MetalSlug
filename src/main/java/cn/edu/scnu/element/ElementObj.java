@@ -4,13 +4,18 @@ import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @说明 所有元素的基类
  */
 
 public abstract class ElementObj {
+    private static final Map<ImageIcon,Rectangle> OPAQUE_BOUNDS_CACHE=
+            new ConcurrentHashMap<ImageIcon,Rectangle>(); //每张帧图只扫描一次透明边界
     private int x;
     private int y;
     private int w;
@@ -126,6 +131,77 @@ public abstract class ElementObj {
     }
 
     protected void add(long gameTime) {
+    }
+
+    //返回图片中 alpha 大于零的最小矩形，并缓存扫描结果
+    protected static Rectangle getOpaqueBounds(ImageIcon frame) {
+        return new Rectangle(OPAQUE_BOUNDS_CACHE.computeIfAbsent(
+                frame,ElementObj::scanOpaqueBounds));
+    }
+
+    //首次访问帧图时扫描并生成不可变用途的透明边界值
+    private static Rectangle scanOpaqueBounds(ImageIcon frame) {
+        int width=frame.getIconWidth();
+        int height=frame.getIconHeight();
+        BufferedImage image=new BufferedImage(width,height,BufferedImage.TYPE_INT_ARGB);
+        Graphics2D graphics=image.createGraphics();
+        try {
+            graphics.drawImage(frame.getImage(),0,0,null);
+        }finally {
+            graphics.dispose();
+        }
+        int minX=width;
+        int minY=height;
+        int maxX=-1;
+        int maxY=-1;
+        for(int y=0;y<height;y++) {
+            for(int x=0;x<width;x++) {
+                if((image.getRGB(x,y)>>>24)!=0) {
+                    minX=Math.min(minX,x);
+                    minY=Math.min(minY,y);
+                    maxX=Math.max(maxX,x);
+                    maxY=Math.max(maxY,y);
+                }
+            }
+        }
+        return maxX<0 ? new Rectangle(0,0,width,height)
+                : new Rectangle(minX,minY,maxX-minX+1,maxY-minY+1);
+    }
+
+    //按百分比缩放像素，确保非空尺寸至少为一像素
+    protected static int scalePixels(int pixels,int scalePercent) {
+        return Math.max(1,(int)Math.round(pixels*scalePercent/100.0));
+    }
+
+    //根据逻辑框脚底中心计算当前帧整张 PNG 的绘制区域
+    protected Rectangle getFootAnchoredDrawBounds(ImageIcon frame,
+                                                   int scalePercent,
+                                                   boolean mirrored) {
+        Rectangle opaque=getOpaqueBounds(frame);
+        double scale=scalePercent/100.0;
+        double opaqueCenter=opaque.x+opaque.width/2.0;
+        if(mirrored) {
+            opaqueCenter=frame.getIconWidth()-opaqueCenter;
+        }
+        int drawWidth=scalePixels(frame.getIconWidth(),scalePercent);
+        int drawHeight=scalePixels(frame.getIconHeight(),scalePercent);
+        int drawX=(int)Math.round(getX()+getW()/2.0-opaqueCenter*scale);
+        int drawY=(int)Math.round(getY()+getH()
+                -(opaque.y+opaque.height)*scale);
+        return new Rectangle(drawX,drawY,drawWidth,drawHeight);
+    }
+
+    //以透明边界的脚底中心为锚点绘制当前帧
+    protected void drawFootAnchoredFrame(Graphics g,ImageIcon frame,
+                                         int scalePercent,boolean mirrored) {
+        Rectangle bounds=getFootAnchoredDrawBounds(frame,scalePercent,mirrored);
+        if(mirrored) {
+            g.drawImage(frame.getImage(),bounds.x+bounds.width,bounds.y,
+                    -bounds.width,bounds.height,null);
+        }else {
+            g.drawImage(frame.getImage(),bounds.x,bounds.y,
+                    bounds.width,bounds.height,null);
+        }
     }
 
     //死亡方法 给子类继承的

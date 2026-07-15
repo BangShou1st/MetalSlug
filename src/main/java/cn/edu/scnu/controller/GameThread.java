@@ -5,6 +5,8 @@ import cn.edu.scnu.element.MapObj;
 import cn.edu.scnu.element.Play;
 import cn.edu.scnu.element.RoleObj;
 import cn.edu.scnu.element.effect.HitEffect;
+import cn.edu.scnu.element.hostage.Hostage;
+import cn.edu.scnu.element.hostage.HostageState;
 import cn.edu.scnu.element.weapon.Bullet;
 import cn.edu.scnu.element.weapon.EnemyBullet;
 import cn.edu.scnu.element.weapon.Grenade;
@@ -16,7 +18,6 @@ import cn.edu.scnu.manager.GameLoad;
 import javax.swing.*;
 import java.awt.Rectangle;
 import java.util.List;
-import java.util.Map;
 
 /**
  * @说明 游戏的主线程，用于控制游戏加载，游戏关卡，游戏运行时自动化
@@ -33,7 +34,9 @@ public class GameThread extends Thread {
         START, //关卡已加载，等待开始
         RUNNING, //关卡正常运行
         PAUSED, //暂停后的游戏设置界面
-        FAILED //玩家死亡后的失败界面
+        FAILED, //玩家死亡后的失败界面
+        LEVEL_CLEAR, //第一关 Boss 被击败后的完成界面
+        VICTORY //全部关卡完成后的胜利界面
     }
 
     private ElementManager em;
@@ -42,7 +45,9 @@ public class GameThread extends Thread {
     private volatile boolean loadRequested; //是否需要加载当前选择的关卡
     private volatile boolean startAfterLoad; //加载完成后是否直接进入运行状态
     private volatile int currentLevel=1; //当前选择的逻辑关卡编号
+    private boolean levelBossLoaded; //当前关卡是否已经成功创建 Boss
 
+    //取得唯一元素管理器并创建游戏逻辑线程
     public GameThread() {
         em = ElementManager.getManager();
     }
@@ -86,6 +91,7 @@ public class GameThread extends Thread {
     private void gameLoad() {
         em.clearAll();
         camera.reset();
+        levelBossLoaded=false;
 
         String mapKey="map.level"+currentLevel;
         String groundKey=mapKey+".groundSourceY";
@@ -104,14 +110,13 @@ public class GameThread extends Thread {
         em.addElement(map,GameElement.MAPS);
         camera.setWorldSize(map.getW(),map.getH());
 
-        int playerHeight=GameLoad.getImages("player.stand").get(0).getIconHeight();
-        int playerY=map.getGroundY()-playerHeight;
-        GameLoad.loadPlay("100,"+playerY+",100,10");
+        GameLoad.loadPlay("100,0,100,10");
         Play play=(Play)em.getElementByKey(GameElement.PLAY).get(0);
         play.setWorldWidth(map.getW());
         play.placeOnGround(map.getGroundY());
         loadEnemies(map);
-
+        loadBoss(map);
+        loadHostages(map);
     }
 
     //根据当前关卡配置创建普通敌人并与地图地面对齐
@@ -120,15 +125,40 @@ public class GameThread extends Thread {
         for(int i=1;i<=count;i++) {
             String value=GameLoad.getString(
                     "level"+currentLevel+".enemy."+i);
-            String[] data=value.split("\\|",2);
-            if(data.length!=2) {
-                throw new IllegalArgumentException("敌人配置格式应为 对象键|创建参数");
-            }
-            ElementObj template=GameLoad.getObj(data[0].trim());
-            ElementObj enemy=template.createElement(data[1].trim());
+            ElementObj enemy=createConfiguredElement(value,"敌人");
             enemy.setY(map.getGroundY()-enemy.getH());
             em.addElement(enemy,GameElement.ENEMY);
         }
+    }
+
+    //加载当前关卡 Boss 并与地图地面对齐
+    private void loadBoss(MapObj map) {
+        String value=GameLoad.getString("level"+currentLevel+".boss");
+        ElementObj boss=createConfiguredElement(value,"Boss");
+        boss.setY(map.getGroundY()-boss.getH());
+        em.addElement(boss,GameElement.BOSS);
+        levelBossLoaded=true;
+    }
+
+    //加载当前关卡人质并与地图地面对齐
+    private void loadHostages(MapObj map) {
+        int count=GameLoad.getInt("level"+currentLevel+".hostage.count");
+        for(int i=1;i<=count;i++) {
+            String value=GameLoad.getString("level"+currentLevel+".hostage."+i);
+            Hostage hostage=(Hostage)createConfiguredElement(value,"人质");
+            hostage.setY(map.getGroundY()-hostage.getH());
+            em.addElement(hostage,GameElement.HOSTAGE);
+        }
+    }
+
+    //解析“对象键|创建参数”格式并通过统一对象工厂创建实体
+    private ElementObj createConfiguredElement(String value,String configName) {
+        String[] data=value.split("\\|",2);
+        if(data.length!=2) {
+            throw new IllegalArgumentException(configName+"配置格式应为 对象键|创建参数");
+        }
+        ElementObj template=GameLoad.getObj(data[0].trim());
+        return template.createElement(data[1].trim());
     }
 
     /**
@@ -147,15 +177,17 @@ public class GameThread extends Thread {
                 continue;
             }
 
-            Map<GameElement,List<ElementObj>> all= em.getGameElements();
             List<ElementObj> enemys=em.getElementByKey(GameElement.ENEMY);
             List<ElementObj> bosses=em.getElementByKey(GameElement.BOSS);
             List<ElementObj> plays=em.getElementByKey(GameElement.PLAY);
             List<ElementObj> playFiles=em.getElementByKey(GameElement.PLAYFILE);
             List<ElementObj> enemyFiles=em.getElementByKey(GameElement.ENEMYFILE);
+            List<ElementObj> hostages=em.getElementByKey(GameElement.HOSTAGE);
 
-            moveAndUpdate(all,gameTime);
+            moveAndUpdate(gameTime);
+            rescueHostages(plays,hostages);
             updateFailedState(plays);
+            updateLevelCompletion(bosses);
             if(gameState!=GameState.RUNNING) {
                 gameTime++;
                 continue;
@@ -166,6 +198,7 @@ public class GameThread extends Thread {
             playerProjectilePk(bosses,playFiles);   //玩家发射物攻击Boss
             applyGrenadeBlasts(playFiles,enemys,bosses);
             enemyProjectilePk(plays,enemyFiles);   //敌方发射物攻击玩家
+            applyEnemyGrenadeBlasts(enemyFiles,plays);
 
             gameTime++;
 
@@ -179,9 +212,17 @@ public class GameThread extends Thread {
 
     //玩家死亡动画结束并被移除后进入失败状态
     private void updateFailedState(List<ElementObj> plays) {
-        if(plays.isEmpty()) {
+        if(gameState==GameState.RUNNING && plays.isEmpty()) {
             gameState=GameState.FAILED;
         }
+    }
+
+    //Boss 死亡残骸显示结束并被移除后更新关卡完成状态
+    private void updateLevelCompletion(List<ElementObj> bosses) {
+        if(gameState!=GameState.RUNNING || !levelBossLoaded || !bosses.isEmpty()) {
+            return;
+        }
+        gameState=currentLevel==1 ? GameState.LEVEL_CLEAR : GameState.VICTORY;
     }
 
     //玩家完成本帧移动后更新摄像机横向位置
@@ -196,9 +237,9 @@ public class GameThread extends Thread {
     /**
      * 游戏元素自动化方法
      */
-    public void moveAndUpdate(Map<GameElement, List<ElementObj>> all,long gameTime) {
+    private void moveAndUpdate(long gameTime) {
         for(GameElement ge:GameElement.values()){
-            List<ElementObj> list=all.get(ge);
+            List<ElementObj> list=em.getElementByKey(ge);
             //编写这样直接操作集合数据的代码建议不要使用迭代器
             for (int i=list.size()-1;i>=0;i--){
                 ElementObj obj = list.get(i);
@@ -267,10 +308,14 @@ public class GameThread extends Thread {
                     continue;
                 }
                 if(player.pk(projectile)) {
-                    player.hurt(projectile.getAttack());
-                    projectile.setLive(false);
-                    if(projectile instanceof EnemyBullet) {
-                        addHitEffect(player,projectile);
+                    if(projectile instanceof Grenade) {
+                        ((Grenade)projectile).triggerExplosion();
+                    }else {
+                        player.hurt(projectile.getAttack());
+                        projectile.setLive(false);
+                        if(projectile instanceof EnemyBullet) {
+                            addHitEffect(player,projectile);
+                        }
                     }
                     break;
                 }
@@ -328,24 +373,44 @@ public class GameThread extends Thread {
         }
     }
 
+    //结算敌方手雷爆炸并只对存活玩家造成一次范围伤害
+    private void applyEnemyGrenadeBlasts(List<ElementObj> enemyFiles,
+                                         List<ElementObj> players) {
+        for(ElementObj projectile:enemyFiles) {
+            if(!(projectile instanceof Grenade)) {
+                continue;
+            }
+            Grenade grenade=(Grenade)projectile;
+            if(!grenade.claimBlastDamage()) {
+                continue;
+            }
+            applyGrenadeBlast(grenade,players);
+        }
+    }
+
+    //玩家接触仍在等待的人质后触发救援
+    private void rescueHostages(List<ElementObj> players,
+                                List<ElementObj> hostages) {
+        for(ElementObj player:players) {
+            if(!canReceiveProjectile(player)) {
+                continue;
+            }
+            for(ElementObj obj:hostages) {
+                if(!obj.isLive()) {
+                    continue;
+                }
+                Hostage hostage=(Hostage)obj;
+                if(hostage.getState()==HostageState.IDLE && player.pk(hostage)) {
+                    hostage.rescue(camera.getX()-hostage.getW()-20);
+                }
+            }
+        }
+    }
+
     //当前关卡退出后统一清理世界对象和摄像机
     private void gameOver() {
         em.clearAll();
         camera.reset();
-    }
-
-    //运行状态下暂停当前游戏
-    public void pauseGame() {
-        if(gameState==GameState.RUNNING) {
-            gameState=GameState.PAUSED;
-        }
-    }
-
-    //暂停状态下继续当前游戏
-    public void continueGame() {
-        if(gameState==GameState.PAUSED) {
-            gameState=GameState.RUNNING;
-        }
     }
 
     //获取当前游戏流程状态
@@ -362,6 +427,14 @@ public class GameThread extends Thread {
     public void startGame() {
         if(gameState==GameState.START) {
             gameState=GameState.RUNNING;
+        }else if(gameState==GameState.LEVEL_CLEAR) {
+            currentLevel=2;
+            startAfterLoad=false;
+            loadRequested=true;
+            levelRunning=false;
+        }else if(gameState==GameState.VICTORY) {
+            gameState=GameState.MAIN_MENU;
+            levelRunning=false;
         }
     }
 
@@ -396,6 +469,7 @@ public class GameThread extends Thread {
                 break;
             case START:
             case FAILED:
+            case LEVEL_CLEAR:
                 gameState=GameState.LEVEL_SELECT;
                 levelRunning=false;
                 break;
@@ -404,6 +478,10 @@ public class GameThread extends Thread {
                 break;
             case PAUSED:
                 gameState=GameState.RUNNING;
+                break;
+            case VICTORY:
+                gameState=GameState.MAIN_MENU;
+                levelRunning=false;
                 break;
             default:
                 break;
@@ -467,21 +545,11 @@ public class GameThread extends Thread {
         levelRunning=false;
     }
 
-    //结束当前关卡
-    public void finishLevel() {
-        levelRunning=false;
-    }
-
     //结束整个游戏
     public void stopGame() {
         running=false;
         levelRunning=false;
         interrupt();
-    }
-
-    //判断当前游戏是否暂停
-    public boolean isPaused() {
-        return gameState==GameState.PAUSED;
     }
 
     //判断整个游戏逻辑线程是否仍需继续运行

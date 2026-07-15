@@ -1,113 +1,75 @@
 package cn.edu.scnu.element.boss;
 
 import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.element.effect.MuzzleEffect;
+import cn.edu.scnu.element.weapon.BossShell;
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.ImageIcon;
 
-/**
- * TankBoss - 第一关Boss（大型坦克）
- * 
- * <p>特点：
- * <ul>
- * <li>第一关最终Boss，大型坦克造型</li>
- * <li>生命值较高（配置值，默认300）</li>
- * <li>攻击力20，发射BossShell炮弹</li>
- * <li>攻击冷却80帧，攻击频率适中</li>
- * <li>攻击触发帧为第2帧（0-indexed）</li>
- * </ul>
- * 
- * <p>行为模式：等待激活 → 激活后周期性攻击 → 被击败后播放残骸动画 → 触发关卡完成
- * 
- * <p>设计注意：
- * <ul>
- * <li>TankBoss位于第一关末尾（约5000像素位置）</li>
- * <li>玩家到达bossTriggerX（约4700像素）时被激活</li>
- * <li>死亡后播放boss1.wreck动画，然后删除</li>
- * </ul>
- * 
- * @see AbstractBoss
- */
+//第一关使用 BossShell 攻击的大型坦克 Boss
 public class TankBoss extends AbstractBoss {
-    private static final String IDLE_ANIMATION="boss1.idle";
-    private static final String ATTACK_ANIMATION="boss1.attack";
-    private static final String WRECK_ANIMATION="boss1.wreck";
-    private static final int IDLE_INTERVAL=3;
-    private static final int ATTACK_INTERVAL=3;
-    /** 攻击触发帧为第2帧（0-indexed），开炮动作完成时 */
-    private static final int ATTACK_FRAME=2;
-    /** 攻击冷却80帧 */
-    private static final long ATTACK_COOLDOWN_FRAMES=80;
+    private static final String IDLE_ANIMATION="boss1.idle"; //坦克 Boss 待机动画键
+    private static final String ATTACK_ANIMATION="boss1.attack"; //坦克 Boss 攻击动画键
+    private static final String WRECK_ANIMATION="boss1.wreck"; //坦克 Boss 残骸图片键
+    private static final int IDLE_INTERVAL=3; //待机动画换帧间隔
+    private static final int ATTACK_INTERVAL=3; //攻击动画换帧间隔
+    private static final int ATTACK_FRAME=2; //炮弹释放帧
+    private static final int ATTACK_COOLDOWN_FRAMES=80; //攻击冷却逻辑帧数
+    private static final int ACTIVATION_RANGE=500; //玩家触发战斗的水平范围
+    private static final int ATTACK_RANGE=420; //Boss 开始开炮的水平范围
 
-    /** 供GameLoad通过反射创建模板对象 */
+    //供 GameLoad 通过反射创建模板
     public TankBoss() {
     }
 
-    /**
-     * 创建TankBoss实体
-     * @param x 初始世界横坐标
-     * @param y 初始世界纵坐标
-     * @param icon 初始动画帧图标
-     * @param hp 生命值
-     * @param attack 攻击力
-     */
-    private TankBoss(int x, int y, ImageIcon icon, int hp, int attack) {
-        super(x, y, icon, hp, attack);
+    //使用待机首帧和配置数据创建坦克 Boss
+    private TankBoss(int x,int y,ImageIcon icon,int hp,int attack) {
+        super(x,y,icon,hp,attack,GameLoad.getInt("sprite.boss.tank.scalePercent"));
+        activationRange=ACTIVATION_RANGE;
+        attackRange=ATTACK_RANGE;
     }
 
-    /**
-     * 按配置字符串创建TankBoss
-     * <p>配置格式：x,y,hp
-     * @param str 配置字符串
-     * @return TankBoss实例
-     */
+    //按 x,y,hp,attack 格式创建坦克 Boss
     @Override
     public ElementObj createElement(String str) {
         String[] data=str.split(",");
-        if (data.length != 3) {
-            throw new IllegalArgumentException("TankBoss配置格式应为 x,y,hp");
-        }
-
-        int x=Integer.parseInt(data[0].trim());
-        int y=Integer.parseInt(data[1].trim());
-        int hp=Integer.parseInt(data[2].trim());
-
-        ImageIcon icon=GameLoad.getImages(IDLE_ANIMATION).get(0);
-        return new TankBoss(x, y, icon, hp, 20);
+        if(data.length!=4) throw new IllegalArgumentException("TankBoss 配置格式应为 x,y,hp,attack");
+        return new TankBoss(Integer.parseInt(data[0].trim()),Integer.parseInt(data[1].trim()),
+                GameLoad.getImages(IDLE_ANIMATION).get(0),Integer.parseInt(data[2].trim()),
+                Integer.parseInt(data[3].trim()));
     }
 
-    @Override
-    protected String getIdleAnimation() {
-        return IDLE_ANIMATION;
-    }
+    //获取待机动画键
+    @Override protected String getIdleAnimation() { return IDLE_ANIMATION; }
+    //获取攻击动画键
+    @Override protected String getAttackAnimation() { return ATTACK_ANIMATION; }
+    //获取残骸图片键
+    @Override protected String getWreckAnimation() { return WRECK_ANIMATION; }
+    //获取待机动画换帧间隔
+    @Override protected int getIdleInterval() { return IDLE_INTERVAL; }
+    //获取攻击动画换帧间隔
+    @Override protected int getAttackInterval() { return ATTACK_INTERVAL; }
+    //获取炮弹释放帧
+    @Override protected int getAttackFrame() { return ATTACK_FRAME; }
+    //获取攻击冷却逻辑帧数
+    @Override protected int getAttackCooldownFrames() { return ATTACK_COOLDOWN_FRAMES; }
 
+    //创建一枚 BossShell 和一次枪口特效
     @Override
-    protected String getAttackAnimation() {
-        return ATTACK_ANIMATION;
-    }
-
-    @Override
-    protected String getWreckAnimation() {
-        return WRECK_ANIMATION;
-    }
-
-    @Override
-    protected int getIdleInterval() {
-        return IDLE_INTERVAL;
-    }
-
-    @Override
-    protected int getAttackInterval() {
-        return ATTACK_INTERVAL;
-    }
-
-    @Override
-    protected int getAttackFrame() {
-        return ATTACK_FRAME;
-    }
-
-    @Override
-    protected long getAttackCooldownFrames() {
-        return ATTACK_COOLDOWN_FRAMES;
+    protected void releaseAttack() {
+        java.awt.Rectangle bounds=getCurrentDrawBounds();
+        int direction=facingRight ? 1 : -1;
+        int muzzleX=facingRight ? bounds.x+bounds.width : bounds.x;
+        int muzzleY=bounds.y+(int)(bounds.height*0.25);
+        int effectWidth=GameLoad.getImages("effect.muzzle").get(0).getIconWidth();
+        int effectHeight=GameLoad.getImages("effect.muzzle").get(0).getIconHeight();
+        ElementManager manager=ElementManager.getManager();
+        manager.addElement(new BossShell(muzzleX,muzzleY,findPlayer(),getAttack()),
+                GameElement.ENEMYFILE);
+        manager.addElement(new MuzzleEffect(direction>0 ? muzzleX : muzzleX-effectWidth,
+                muzzleY-effectHeight/2,direction),GameElement.EFFECT);
     }
 }

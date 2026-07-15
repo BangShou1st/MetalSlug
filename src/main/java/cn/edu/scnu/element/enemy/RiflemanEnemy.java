@@ -30,7 +30,7 @@ public class RiflemanEnemy extends AbstractEnemy {
     //使用已加载的移动首帧和配置数据创建步枪兵实体
     private RiflemanEnemy(int x, int y, ImageIcon icon, int hp, int attack,
                           int patrolMinX, int patrolMaxX) {
-        super(x, y, icon, hp, attack);
+        super(x,y,icon,hp,attack,GameLoad.getInt("sprite.enemy.rifleman.scalePercent"));
         this.patrolMinX=patrolMinX;
         this.patrolMaxX=patrolMaxX;
         moveSpeed=MOVE_SPEED;
@@ -41,30 +41,10 @@ public class RiflemanEnemy extends AbstractEnemy {
     //按 x,y,hp,attack,patrolMinX,patrolMaxX 格式创建步枪兵
     @Override
     public ElementObj createElement(String str) {
-        String[] data=str.split(",");
-        if (data.length != 6) {
-            throw new IllegalArgumentException(
-                    "步枪兵配置格式应为 x,y,hp,attack,patrolMinX,patrolMaxX");
-        }
-
-        int x=Integer.parseInt(data[0].trim());
-        int y=Integer.parseInt(data[1].trim());
-        int hp=Integer.parseInt(data[2].trim());
-        int attack=Integer.parseInt(data[3].trim());
-        int patrolMinX=Integer.parseInt(data[4].trim());
-        int patrolMaxX=Integer.parseInt(data[5].trim());
-
-        if (patrolMinX > patrolMaxX) {
-            throw new IllegalArgumentException(
-                    "步枪兵 patrolMinX 不能大于 patrolMaxX");
-        }
-        if (x < patrolMinX || x > patrolMaxX) {
-            throw new IllegalArgumentException("步枪兵 x 必须位于巡逻区间内");
-        }
-
+        int[] data=parseEnemyConfig(str,"步枪兵");
         ImageIcon icon=GameLoad.getImages(MOVE_ANIMATION).get(0);
         return new RiflemanEnemy(
-                x, y, icon, hp, attack, patrolMinX, patrolMaxX);
+                data[0],data[1],icon,data[2],data[3],data[4],data[5]);
     }
 
     //根据当前状态复用公共动画播放器切换图片
@@ -101,30 +81,23 @@ public class RiflemanEnemy extends AbstractEnemy {
     //在唯一攻击帧创建步枪兵子弹和枪口特效
     @Override
     protected void releaseAttack() {
-        ImageIcon frame=getIcon();
-        int drawWidth=frame.getIconWidth();
-        int drawHeight=frame.getIconHeight();
-        int drawX=getX()+getW()/2-drawWidth/2;
-        int drawY=getY()+getH()-drawHeight;
-        int direction=-1;
-        int muzzleX=drawX+(int)Math.round(drawWidth*0.04);
-        if(facingRight) {
-            direction=1;
-            muzzleX=drawX+(int)Math.round(drawWidth*0.96);
-        }
-        int muzzleY=drawY+(int)Math.round(drawHeight*0.52);
-        int bulletX=muzzleX;
-        int effectX=muzzleX;
-        if(direction<0) {
-            bulletX-=23;
-            effectX-=32;
-        }
+        java.awt.Rectangle bounds=getCurrentDrawBounds();
+        int direction=facingRight ? 1 : -1;
+        int muzzleX=bounds.x+(int)Math.round(bounds.width*
+                (facingRight ? 0.96 : 0.04));
+        int muzzleY=bounds.y+(int)Math.round(bounds.height*0.52);
+        int bulletWidth=GameLoad.getImages("weapon.enemyBullet").get(0).getIconWidth();
+        int bulletHeight=GameLoad.getImages("weapon.enemyBullet").get(0).getIconHeight();
+        int muzzleWidth=GameLoad.getImages("effect.muzzle").get(0).getIconWidth();
+        int muzzleHeight=GameLoad.getImages("effect.muzzle").get(0).getIconHeight();
+        int bulletX=direction>0 ? muzzleX : muzzleX-bulletWidth;
+        int effectX=direction>0 ? muzzleX : muzzleX-muzzleWidth;
 
         ElementManager manager=ElementManager.getManager();
         manager.addElement(new EnemyBullet(
-                bulletX,muzzleY-3,direction,getAttack()),
+                bulletX,muzzleY-bulletHeight/2,direction,getAttack()),
                 GameElement.ENEMYFILE);
         manager.addElement(new MuzzleEffect(
-                effectX,muzzleY-17,direction),GameElement.EFFECT);
+                effectX,muzzleY-muzzleHeight/2,direction),GameElement.EFFECT);
     }
 }

@@ -4,6 +4,7 @@ import cn.edu.scnu.controller.GameThread;
 import cn.edu.scnu.element.ElementObj;
 import cn.edu.scnu.element.Play;
 import cn.edu.scnu.element.RoleObj;
+import cn.edu.scnu.element.boss.AbstractBoss;
 import cn.edu.scnu.manager.Camera;
 import cn.edu.scnu.manager.ElementManager;
 import cn.edu.scnu.manager.GameElement;
@@ -12,7 +13,6 @@ import cn.edu.scnu.manager.GameLoad;
 import javax.swing.*;
 import java.awt.*;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 集中负责游戏世界、HUD、菜单和流程界面的绘制。
@@ -144,30 +144,34 @@ public class GameRenderer {
         }else if(state==GameThread.GameState.PAUSED) {
             drawSettings(g,panelWidth,panelHeight,hoveredButton);
         }else if(state==GameThread.GameState.START
-                || state==GameThread.GameState.FAILED) {
+                || state==GameThread.GameState.FAILED
+                || state==GameThread.GameState.LEVEL_CLEAR
+                || state==GameThread.GameState.VICTORY) {
             drawStateMessage(g,panelWidth,panelHeight,state);
         }
     }
 
     //按原枚举顺序绘制经过摄像机平移的世界元素
     private void drawWorld(Graphics2D g) {
-        Map<GameElement,List<ElementObj>> all=em.getGameElements();
         Graphics2D worldGraphics=(Graphics2D)g.create();
-        worldGraphics.translate(-camera.getX(),-camera.getY());
-        for(GameElement ge:GameElement.values()) {
-            if(ge==GameElement.UI) {
-                continue;
+        try {
+            worldGraphics.translate(-camera.getX(),-camera.getY());
+            for(GameElement ge:GameElement.values()) {
+                if(ge==GameElement.UI) {
+                    continue;
+                }
+                for(ElementObj obj:em.getElementSnapshot(ge)) {
+                    obj.showElement(worldGraphics);
+                }
             }
-            for(ElementObj obj:all.get(ge)) {
-                obj.showElement(worldGraphics);
-            }
+        }finally {
+            worldGraphics.dispose();
         }
-        worldGraphics.dispose();
     }
 
     //使用未平移的画笔绘制固定 UI 元素
     private void drawUiElements(Graphics2D g) {
-        for(ElementObj obj:em.getElementByKey(GameElement.UI)) {
+        for(ElementObj obj:em.getElementSnapshot(GameElement.UI)) {
             obj.showElement(g);
         }
     }
@@ -192,28 +196,31 @@ public class GameRenderer {
         drawCoverImage(g,background.getImage(),panelWidth,panelHeight);
 
         Graphics2D content=(Graphics2D)g.create();
-        content.setColor(new Color(0,0,0,180));
-        content.fillRoundRect(170,120,560,350,20,20);
-        content.setColor(Color.WHITE);
-        content.setFont(new Font("Microsoft YaHei",Font.BOLD,30));
-        drawCenteredString(content,"操作说明",170,panelWidth);
-        content.setFont(new Font("Microsoft YaHei",Font.PLAIN,21));
-        String[] lines={
-                "A / D 或方向键：左右移动",
-                "W 或上方向键：跳跃",
-                "S 或下方向键：下蹲",
-                "J：射击",
-                "K：投掷手雷",
-                "P：打开 / 关闭设置",
-                "R：失败后重新开始",
-                "Esc：返回上一界面 / 打开设置"
-        };
-        int textY=210;
-        for(String line:lines) {
-            content.drawString(line,225,textY);
-            textY+=30;
+        try {
+            content.setColor(new Color(0,0,0,180));
+            content.fillRoundRect(170,120,560,350,20,20);
+            content.setColor(Color.WHITE);
+            content.setFont(new Font("Microsoft YaHei",Font.BOLD,30));
+            drawCenteredString(content,"操作说明",170,panelWidth);
+            content.setFont(new Font("Microsoft YaHei",Font.PLAIN,21));
+            String[] lines={
+                    "A / D 或方向键：左右移动",
+                    "W 或上方向键：跳跃",
+                    "S 或下方向键：下蹲",
+                    "J：射击",
+                    "K：投掷手雷",
+                    "P：打开 / 关闭设置",
+                    "R：失败后重新开始",
+                    "Esc：返回上一界面 / 打开设置"
+            };
+            int textY=210;
+            for(String line:lines) {
+                content.drawString(line,225,textY);
+                textY+=30;
+            }
+        }finally {
+            content.dispose();
         }
-        content.dispose();
 
         drawMenuButton(g,getBackButtonBounds(),"返回",
                 hoveredButton==MenuButton.BACK);
@@ -226,11 +233,14 @@ public class GameRenderer {
         drawCoverImage(g,background.getImage(),panelWidth,panelHeight);
 
         Graphics2D levelGraphics=(Graphics2D)g.create();
-        drawLevelOption(levelGraphics,getLevelOneBounds(panelWidth),
-                MenuButton.LEVEL_ONE,"点击进入",hoveredButton);
-        drawLevelOption(levelGraphics,getLevelTwoBounds(panelWidth),
-                MenuButton.LEVEL_TWO,"点击进入",hoveredButton);
-        levelGraphics.dispose();
+        try {
+            drawLevelOption(levelGraphics,getLevelOneBounds(panelWidth),
+                    MenuButton.LEVEL_ONE,"点击进入",hoveredButton);
+            drawLevelOption(levelGraphics,getLevelTwoBounds(panelWidth),
+                    MenuButton.LEVEL_TWO,"点击进入",hoveredButton);
+        }finally {
+            levelGraphics.dispose();
+        }
 
         drawMenuButton(g,getBackButtonBounds(),"返回",
                 hoveredButton==MenuButton.BACK);
@@ -256,12 +266,15 @@ public class GameRenderer {
     private void drawSettings(Graphics2D g,int panelWidth,int panelHeight,
                               MenuButton hoveredButton) {
         Graphics2D overlay=(Graphics2D)g.create();
-        overlay.setColor(new Color(0,0,0,175));
-        overlay.fillRect(0,0,panelWidth,panelHeight);
-        overlay.setColor(Color.WHITE);
-        overlay.setFont(new Font("Microsoft YaHei",Font.BOLD,42));
-        drawCenteredString(overlay,"游戏设置",190,panelWidth);
-        overlay.dispose();
+        try {
+            overlay.setColor(new Color(0,0,0,175));
+            overlay.fillRect(0,0,panelWidth,panelHeight);
+            overlay.setColor(Color.WHITE);
+            overlay.setFont(new Font("Microsoft YaHei",Font.BOLD,42));
+            drawCenteredString(overlay,"游戏设置",190,panelWidth);
+        }finally {
+            overlay.dispose();
+        }
 
         drawMenuButton(g,getBackButtonBounds(),"返回游戏",
                 hoveredButton==MenuButton.RETURN_GAME);
@@ -275,26 +288,29 @@ public class GameRenderer {
     private void drawMenuButton(Graphics2D g,Rectangle bounds,String text,
                                 boolean hovered) {
         Graphics2D buttonGraphics=(Graphics2D)g.create();
-        if(hovered) {
-            buttonGraphics.setColor(new Color(100,55,10,230));
-        }else {
-            buttonGraphics.setColor(new Color(15,20,16,210));
+        try {
+            if(hovered) {
+                buttonGraphics.setColor(new Color(100,55,10,230));
+            }else {
+                buttonGraphics.setColor(new Color(15,20,16,210));
+            }
+            buttonGraphics.fillRoundRect(bounds.x,bounds.y,bounds.width,bounds.height,16,16);
+            if(hovered) {
+                buttonGraphics.setColor(new Color(255,175,45));
+            }else {
+                buttonGraphics.setColor(new Color(210,120,25));
+            }
+            buttonGraphics.setStroke(new BasicStroke(2));
+            buttonGraphics.drawRoundRect(bounds.x,bounds.y,bounds.width,bounds.height,16,16);
+            buttonGraphics.setFont(new Font("Microsoft YaHei",Font.BOLD,24));
+            buttonGraphics.setColor(Color.WHITE);
+            FontMetrics metrics=buttonGraphics.getFontMetrics();
+            int textX=bounds.x+(bounds.width-metrics.stringWidth(text))/2;
+            int textY=bounds.y+(bounds.height-metrics.getHeight())/2+metrics.getAscent();
+            buttonGraphics.drawString(text,textX,textY);
+        }finally {
+            buttonGraphics.dispose();
         }
-        buttonGraphics.fillRoundRect(bounds.x,bounds.y,bounds.width,bounds.height,16,16);
-        if(hovered) {
-            buttonGraphics.setColor(new Color(255,175,45));
-        }else {
-            buttonGraphics.setColor(new Color(210,120,25));
-        }
-        buttonGraphics.setStroke(new BasicStroke(2));
-        buttonGraphics.drawRoundRect(bounds.x,bounds.y,bounds.width,bounds.height,16,16);
-        buttonGraphics.setFont(new Font("Microsoft YaHei",Font.BOLD,24));
-        buttonGraphics.setColor(Color.WHITE);
-        FontMetrics metrics=buttonGraphics.getFontMetrics();
-        int textX=bounds.x+(bounds.width-metrics.stringWidth(text))/2;
-        int textY=bounds.y+(bounds.height-metrics.getHeight())/2+metrics.getAscent();
-        buttonGraphics.drawString(text,textX,textY);
-        buttonGraphics.dispose();
     }
 
     //保持图片宽高比并裁掉超出面板的部分
@@ -315,22 +331,25 @@ public class GameRenderer {
     //在固定窗口坐标绘制玩家生命值和关卡信息
     private void drawHud(Graphics2D g,int panelWidth) {
         int hp=0;
-        List<ElementObj> plays=em.getElementByKey(GameElement.PLAY);
+        List<ElementObj> plays=em.getElementSnapshot(GameElement.PLAY);
         if(!plays.isEmpty()) {
             hp=((Play)plays.get(0)).getHp();
         }
 
         Graphics2D hud=(Graphics2D)g.create();
-        hud.setFont(new Font("SansSerif",Font.BOLD,20));
-        drawHudText(hud,"HP: "+hp,20,30);
-        drawHudText(hud,"LEVEL: "+gameThread.getCurrentLevel(),20,55);
-        drawBossHud(hud,panelWidth);
-        hud.dispose();
+        try {
+            hud.setFont(new Font("SansSerif",Font.BOLD,20));
+            drawHudText(hud,"HP: "+hp,20,30);
+            drawHudText(hud,"LEVEL: "+gameThread.getCurrentLevel(),20,55);
+            drawBossHud(hud,panelWidth);
+        }finally {
+            hud.dispose();
+        }
     }
 
     //读取当前 Boss 并绘制固定在窗口顶部的生命条
     private void drawBossHud(Graphics2D g,int panelWidth) {
-        List<ElementObj> bosses=em.getElementByKey(GameElement.BOSS);
+        List<ElementObj> bosses=em.getElementSnapshot(GameElement.BOSS);
         if(bosses.isEmpty()) {
             trackedBoss=null;
             bossMaxHp=0;
@@ -344,6 +363,9 @@ public class GameRenderer {
         }
         if(boss.getHp()>bossMaxHp) {
             bossMaxHp=boss.getHp();
+        }
+        if(boss instanceof AbstractBoss && !((AbstractBoss)boss).isActive()) {
+            return;
         }
         if(bossMaxHp<=0) {
             return;
@@ -390,20 +412,29 @@ public class GameRenderer {
         if(state==GameThread.GameState.START) {
             title="METAL SLUG";
             message="Press ENTER to Start";
+        }else if(state==GameThread.GameState.LEVEL_CLEAR) {
+            title="MISSION COMPLETE";
+            message="Press ENTER for Next Mission";
+        }else if(state==GameThread.GameState.VICTORY) {
+            title="ALL MISSIONS COMPLETE";
+            message="Press ENTER to Main Menu";
         }else {
             title="MISSION FAILED";
             message="Press R to Restart";
         }
 
         Graphics2D overlay=(Graphics2D)g.create();
-        overlay.setColor(new Color(0,0,0,150));
-        overlay.fillRect(0,0,panelWidth,panelHeight);
-        overlay.setColor(Color.WHITE);
-        overlay.setFont(new Font("SansSerif",Font.BOLD,42));
-        drawCenteredString(overlay,title,260,panelWidth);
-        overlay.setFont(new Font("SansSerif",Font.PLAIN,22));
-        drawCenteredString(overlay,message,310,panelWidth);
-        overlay.dispose();
+        try {
+            overlay.setColor(new Color(0,0,0,150));
+            overlay.fillRect(0,0,panelWidth,panelHeight);
+            overlay.setColor(Color.WHITE);
+            overlay.setFont(new Font("SansSerif",Font.BOLD,42));
+            drawCenteredString(overlay,title,260,panelWidth);
+            overlay.setFont(new Font("SansSerif",Font.PLAIN,22));
+            drawCenteredString(overlay,message,310,panelWidth);
+        }finally {
+            overlay.dispose();
+        }
     }
 
     //按照当前字体将文字绘制在窗口水平方向中央

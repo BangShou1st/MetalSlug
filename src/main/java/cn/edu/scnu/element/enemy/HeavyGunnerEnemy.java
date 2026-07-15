@@ -1,64 +1,36 @@
 package cn.edu.scnu.element.enemy;
 
 import cn.edu.scnu.element.ElementObj;
+import cn.edu.scnu.element.effect.MuzzleEffect;
+import cn.edu.scnu.element.weapon.EnemyBullet;
+import cn.edu.scnu.manager.ElementManager;
+import cn.edu.scnu.manager.GameElement;
 import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.ImageIcon;
 
-/**
- * 重机枪兵 - 高血量火力压制单位
- * 
- * <p>特点：
- * <ul>
- * <li>生命值最高，是普通敌人中最耐打的单位</li>
- * <li>移动速度最慢（0.8），机动性差</li>
- * <li>攻击时连续发射多发子弹，火力压制效果强</li>
- * <li>攻击间隔短（2帧），攻击动画播放速度快</li>
- * <li>攻击冷却最长（80帧），一轮射击后需要较长时间恢复</li>
- * <li>适合布置在固定防御点，提供持续火力输出</li>
- * </ul>
- * 
- * <p>行为模式：巡逻 → 发现玩家（380像素内）→ 接近至攻击范围（300像素）→ 连续射击 → 长冷却等待
- * 
- * @see AbstractEnemy
- */
+//每次攻击以三个关键帧连续发射敌方子弹的重机枪兵
 public class HeavyGunnerEnemy extends AbstractEnemy {
-    private static final String MOVE_ANIMATION="enemy.heavyGunner.move";
-    private static final String ATTACK_ANIMATION="enemy.heavyGunner.attack";
-    private static final String DEATH_ANIMATION="enemy.death";
-    /** 移动动画间隔较长，4帧换一帧，体现笨重感 */
-    private static final int MOVE_INTERVAL=4;
-    /** 攻击动画间隔短，2帧换一帧，体现高射速 */
-    private static final int ATTACK_INTERVAL=2;
-    private static final int DEATH_INTERVAL=2;
-    /** 移动速度最慢，0.8像素/帧，体现重装特点 */
-    private static final double MOVE_SPEED=0.8;
-    /** 发现范围较大，380像素 */
-    private static final int DETECT_RANGE=380;
-    /** 攻击范围中等，300像素 */
-    private static final int ATTACK_RANGE=300;
-    /** 攻击触发帧为第1帧（0-indexed），射击动作早期触发 */
-    private static final int ATTACK_FRAME=1;
-    /** 攻击冷却最长，80帧，一轮射击后需要长时间恢复 */
-    private static final int ATTACK_COOLDOWN_FRAMES=80;
+    private static final String MOVE_ANIMATION="enemy.heavyGunner.move"; //重机枪兵移动动画键
+    private static final String ATTACK_ANIMATION="enemy.heavyGunner.attack"; //重机枪兵攻击动画键
+    private static final String DEATH_ANIMATION="enemy.death"; //敌人公共死亡动画键
+    private static final int MOVE_INTERVAL=4; //移动动画换帧间隔
+    private static final int ATTACK_INTERVAL=2; //攻击动画换帧间隔
+    private static final int DEATH_INTERVAL=2; //死亡动画换帧间隔
+    private static final double MOVE_SPEED=0.8; //水平移动速度
+    private static final int DETECT_RANGE=380; //发现玩家范围
+    private static final int ATTACK_RANGE=300; //开始攻击范围
+    private static final int ATTACK_FRAME=1; //子弹释放帧
+    private static final int ATTACK_COOLDOWN_FRAMES=80; //攻击冷却逻辑帧数
 
-    /** 供GameLoad通过反射创建模板对象 */
+    //供 GameLoad 通过反射创建模板
     public HeavyGunnerEnemy() {
     }
 
-    /**
-     * 使用配置数据创建重机枪兵实体
-     * @param x 初始世界横坐标
-     * @param y 初始世界纵坐标
-     * @param icon 初始动画帧图标
-     * @param hp 生命值
-     * @param attack 攻击力
-     * @param patrolMinX 巡逻范围最小横坐标
-     * @param patrolMaxX 巡逻范围最大横坐标
-     */
-    private HeavyGunnerEnemy(int x, int y, ImageIcon icon, int hp, int attack,
-                             int patrolMinX, int patrolMaxX) {
-        super(x, y, icon, hp, attack);
+    //使用移动首帧和配置数据创建重机枪兵
+    private HeavyGunnerEnemy(int x,int y,ImageIcon icon,int hp,int attack,
+                             int patrolMinX,int patrolMaxX) {
+        super(x,y,icon,hp,attack,GameLoad.getInt("sprite.enemy.heavyGunner.scalePercent"));
         this.patrolMinX=patrolMinX;
         this.patrolMaxX=patrolMaxX;
         moveSpeed=MOVE_SPEED;
@@ -66,64 +38,51 @@ public class HeavyGunnerEnemy extends AbstractEnemy {
         attackRange=ATTACK_RANGE;
     }
 
-    /**
-     * 按配置字符串创建重机枪兵
-     * <p>配置格式：x,y,hp,attack,patrolMinX,patrolMaxX
-     * @param str 配置字符串
-     * @return 重机枪兵实例
-     */
+    //按统一六项配置创建重机枪兵
     @Override
     public ElementObj createElement(String str) {
-        String[] data=str.split(",");
-        if (data.length != 6) {
-            throw new IllegalArgumentException(
-                    "重机枪兵配置格式应为 x,y,hp,attack,patrolMinX,patrolMaxX");
-        }
-
-        int x=Integer.parseInt(data[0].trim());
-        int y=Integer.parseInt(data[1].trim());
-        int hp=Integer.parseInt(data[2].trim());
-        int attack=Integer.parseInt(data[3].trim());
-        int patrolMinX=Integer.parseInt(data[4].trim());
-        int patrolMaxX=Integer.parseInt(data[5].trim());
-
-        if (patrolMinX > patrolMaxX) {
-            throw new IllegalArgumentException(
-                    "重机枪兵 patrolMinX 不能大于 patrolMaxX");
-        }
-        if (x < patrolMinX || x > patrolMaxX) {
-            throw new IllegalArgumentException("重机枪兵 x 必须位于巡逻区间内");
-        }
-
-        ImageIcon icon=GameLoad.getImages(MOVE_ANIMATION).get(0);
-        return new HeavyGunnerEnemy(x, y, icon, hp, attack, patrolMinX, patrolMaxX);
+        int[] data=parseEnemyConfig(str,"重机枪兵");
+        return new HeavyGunnerEnemy(data[0],data[1],GameLoad.getImages(MOVE_ANIMATION).get(0),
+                data[2],data[3],data[4],data[5]);
     }
 
-    /** 根据当前状态切换动画 */
+    //根据当前行为状态播放自然尺寸动画
     @Override
     protected void updateImage(long gameTime) {
-        switch (state) {
-            case DEAD:
-                playAnimation(DEATH_ANIMATION, gameTime, DEATH_INTERVAL, false);
-                break;
-            case ATTACK:
-                playAnimation(ATTACK_ANIMATION, gameTime, ATTACK_INTERVAL, false);
-                break;
-            default:
-                playAnimation(MOVE_ANIMATION, gameTime, MOVE_INTERVAL, true);
-                break;
-        }
+        if(state==EnemyState.DEAD) playAnimation(DEATH_ANIMATION,gameTime,DEATH_INTERVAL,false);
+        else if(state==EnemyState.ATTACK) playAnimation(ATTACK_ANIMATION,gameTime,ATTACK_INTERVAL,false);
+        else playAnimation(MOVE_ANIMATION,gameTime,MOVE_INTERVAL,true);
     }
 
-    /** 获取攻击触发帧 */
+    //获取子弹释放帧
     @Override
-    protected int getAttackFrame() {
-        return ATTACK_FRAME;
+    protected int getAttackFrame() { return ATTACK_FRAME; }
+
+    //获取攻击冷却逻辑帧数
+    @Override
+    protected int getAttackCooldownFrames() { return ATTACK_COOLDOWN_FRAMES; }
+
+    //每次关键帧创建一颗敌方子弹和一次枪口特效
+    @Override
+    protected void releaseAttack() {
+        java.awt.Rectangle bounds=getCurrentDrawBounds();
+        int direction=facingRight ? 1 : -1;
+        int muzzleX=facingRight ? bounds.x+(int)(bounds.width*0.95) : bounds.x+(int)(bounds.width*0.05);
+        int muzzleY=bounds.y+(int)(bounds.height*0.56);
+        int bulletWidth=GameLoad.getImages("weapon.enemyBullet").get(0).getIconWidth();
+        int bulletHeight=GameLoad.getImages("weapon.enemyBullet").get(0).getIconHeight();
+        int effectWidth=GameLoad.getImages("effect.muzzle").get(0).getIconWidth();
+        int effectHeight=GameLoad.getImages("effect.muzzle").get(0).getIconHeight();
+        ElementManager manager=ElementManager.getManager();
+        manager.addElement(new EnemyBullet(direction>0 ? muzzleX : muzzleX-bulletWidth,
+                muzzleY-bulletHeight/2,direction,getAttack()),GameElement.ENEMYFILE);
+        manager.addElement(new MuzzleEffect(direction>0 ? muzzleX : muzzleX-effectWidth,
+                muzzleY-effectHeight/2,direction),GameElement.EFFECT);
     }
 
-    /** 获取攻击冷却帧数 */
+    //攻击动画第 1、2、3 帧各释放一发，形成三连发
     @Override
-    protected int getAttackCooldownFrames() {
-        return ATTACK_COOLDOWN_FRAMES;
+    protected boolean shouldReleaseAttackAtFrame(int frame) {
+        return frame>=1 && frame<=3;
     }
 }

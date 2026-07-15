@@ -37,10 +37,6 @@ public class Play extends RoleObj {
     private static final int INVINCIBLE_FRAMES=20; //受伤后的无敌逻辑帧数
     private static final int SHOOT_RELEASE_FRAME=2; //射击动作释放子弹的动画帧
     private static final int THROW_RELEASE_FRAME=3; //投掷动作释放手雷的动画帧
-    private static final int BULLET_WIDTH=23; //普通子弹逻辑宽度
-    private static final int BULLET_HEIGHT=7; //普通子弹逻辑高度
-    private static final int MUZZLE_WIDTH=32; //枪口特效逻辑宽度
-    private static final int MUZZLE_HEIGHT=35; //枪口特效逻辑高度
 
     //玩家当前动作状态
     private enum PlayerState {
@@ -69,6 +65,7 @@ public class Play extends RoleObj {
     private int gravity; //重力
     private int groundY; //玩家脚底对应的地面纵坐标
     private int worldWidth; //玩家可以移动的地图世界宽度
+    private int scalePercent; //玩家素材显示缩放百分比
     private double preciseY; //跳跃过程中使用的精确纵坐标
     private double verticalSpeed; //玩家当前纵向速度
     private PlayerState state=PlayerState.STAND; //玩家当前动作状态
@@ -82,12 +79,13 @@ public class Play extends RoleObj {
 
     //创建具有实际位置、战斗属性和运动参数的玩家
     private Play(int x,int y,int w,int h,ImageIcon icon,int hp,int attack,int speed,
-                 int jumpSpeed,int gravity,int groundY) {
+                 int jumpSpeed,int gravity,int scalePercent) {
         super(x,y,w,h,icon,hp,attack);
         this.speed=speed;
         this.jumpSpeed=jumpSpeed;
         this.gravity=gravity;
-        this.groundY=groundY;
+        this.groundY=0;
+        this.scalePercent=scalePercent;
         worldWidth=GameLoad.getInt("window.width");
         preciseY=y;
         verticalSpeed=0;
@@ -107,9 +105,11 @@ public class Play extends RoleObj {
         int speed=GameLoad.getInt("player.speed");
         int jumpSpeed=GameLoad.getInt("player.jumpSpeed");
         int gravity=GameLoad.getInt("player.gravity");
-        int groundY=GameLoad.getInt("player.groundY");
-        return new Play(x,y,icon.getIconWidth(),icon.getIconHeight(),icon,hp,attack,
-                speed,jumpSpeed,gravity,groundY);
+        int scalePercent=GameLoad.getInt("sprite.player.scalePercent");
+        Rectangle opaque=getOpaqueBounds(icon);
+        return new Play(x,y,scalePixels(opaque.width,scalePercent),
+                scalePixels(opaque.height,scalePercent),icon,hp,attack,
+                speed,jumpSpeed,gravity,scalePercent);
     }
 
     //设置玩家在当前地图中的水平移动范围
@@ -378,25 +378,22 @@ public class Play extends RoleObj {
 
     //根据站姿、蹲姿和朝向计算枪口并创建一颗子弹与一次枪口特效
     private void releaseBullet() {
-        int muzzleSourceX=44;
-        int muzzleSourceY=28;
-        if(state==PlayerState.SHOOT_CROUCH) {
-            muzzleSourceY=31;
-        }
-
-        int muzzleX=getX()+muzzleSourceX;
-        if(direction==DIRECTION_LEFT) {
-            muzzleX=getX()+getW()-1-muzzleSourceX;
-        }
-        int muzzleY=getY()+muzzleSourceY;
-        int bulletX=muzzleX;
-        int effectX=muzzleX;
-        if(direction==DIRECTION_LEFT) {
-            bulletX-=BULLET_WIDTH;
-            effectX-=MUZZLE_WIDTH;
-        }
-        int bulletY=muzzleY-BULLET_HEIGHT/2;
-        int effectY=muzzleY-MUZZLE_HEIGHT/2;
+        boolean mirrored=direction==DIRECTION_LEFT;
+        Rectangle drawBounds=getFootAnchoredDrawBounds(getIcon(),scalePercent,mirrored);
+        double muzzleRatioX=direction==DIRECTION_RIGHT ? 0.83 : 0.17;
+        double muzzleRatioY=state==PlayerState.SHOOT_CROUCH ? 0.57 : 0.52;
+        int muzzleX=drawBounds.x+(int)Math.round(drawBounds.width*muzzleRatioX);
+        int muzzleY=drawBounds.y+(int)Math.round(drawBounds.height*muzzleRatioY);
+        ImageIcon bulletFrame=GameLoad.getImages("weapon.bullet").get(0);
+        ImageIcon muzzleFrame=GameLoad.getImages("effect.muzzle").get(0);
+        int bulletWidth=bulletFrame.getIconWidth();
+        int bulletHeight=bulletFrame.getIconHeight();
+        int muzzleWidth=muzzleFrame.getIconWidth();
+        int muzzleHeight=muzzleFrame.getIconHeight();
+        int bulletX=direction==DIRECTION_RIGHT ? muzzleX : muzzleX-bulletWidth;
+        int effectX=direction==DIRECTION_RIGHT ? muzzleX : muzzleX-muzzleWidth;
+        int bulletY=muzzleY-bulletHeight/2;
+        int effectY=muzzleY-muzzleHeight/2;
 
         ElementManager manager=ElementManager.getManager();
         manager.addElement(new Bullet(bulletX,bulletY,direction,getAttack()),
@@ -407,8 +404,11 @@ public class Play extends RoleObj {
 
     //根据玩家当前朝向从投掷动作的手部位置创建一枚手雷
     private void releaseGrenade() {
-        int releaseX=getX()+getW()/2;
-        int releaseY=getY()+(int)Math.round(getH()*0.12);
+        boolean mirrored=direction==DIRECTION_LEFT;
+        Rectangle drawBounds=getFootAnchoredDrawBounds(getIcon(),scalePercent,mirrored);
+        int releaseX=drawBounds.x+(int)Math.round(drawBounds.width*
+                (direction==DIRECTION_RIGHT ? 0.62 : 0.38));
+        int releaseY=drawBounds.y+(int)Math.round(drawBounds.height*0.18);
         ElementManager.getManager().addElement(
                 new Grenade(releaseX,releaseY,direction,getAttack()),
                 GameElement.PLAYFILE);
@@ -417,11 +417,20 @@ public class Play extends RoleObj {
     //按照玩家朝向绘制当前动画帧
     @Override
     public void showElement(Graphics g) {
-        if(direction==DIRECTION_LEFT) {
-            //负宽度绘制可以水平翻转图片，同时保持玩家逻辑位置不变
-            g.drawImage(getIcon().getImage(),getX()+getW(),getY(),-getW(),getH(),null);
-        }else {
-            g.drawImage(getIcon().getImage(),getX(),getY(),getW(),getH(),null);
-        }
+        drawFootAnchoredFrame(g,getIcon(),scalePercent,direction==DIRECTION_LEFT);
+    }
+
+    //站立和下蹲采用不同身体区域，均保持脚底位置不变
+    @Override
+    public Rectangle getRectangle() {
+        boolean crouching=state==PlayerState.CROUCH
+                || state==PlayerState.SHOOT_CROUCH;
+        double widthRatio=crouching ? 0.64 : 0.50;
+        double heightRatio=crouching ? 0.46 : 0.80;
+        int width=Math.max(1,(int)Math.round(getW()*widthRatio));
+        int height=Math.max(1,(int)Math.round(getH()*heightRatio));
+        int x=getX()+(getW()-width)/2;
+        int y=getY()+getH()-height;
+        return new Rectangle(x,y,width,height);
     }
 }

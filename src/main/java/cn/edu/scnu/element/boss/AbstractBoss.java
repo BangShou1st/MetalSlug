@@ -4,249 +4,178 @@ import cn.edu.scnu.element.ElementObj;
 import cn.edu.scnu.element.RoleObj;
 import cn.edu.scnu.manager.ElementManager;
 import cn.edu.scnu.manager.GameElement;
+import cn.edu.scnu.manager.GameLoad;
 
 import javax.swing.ImageIcon;
 import java.awt.Graphics;
-import java.awt.Image;
 import java.awt.Rectangle;
 
-/**
- * Boss抽象基类 - 所有Boss的公共父类
- * 
- * <p>职责：
- * <ul>
- * <li>统一Boss状态机管理（IDLE、ATTACK_PRIMARY、ATTACK_SPECIAL、HURT、DEAD）</li>
- * <li>生命值和最大生命值管理</li>
- * <li>攻击冷却和攻击触发机制</li>
- * <li>面向玩家的自动朝向</li>
- * <li>激活机制（玩家到达触发点后才开始攻击）</li>
- * <li>死亡动画播放和残骸显示</li>
- * </ul>
- * 
- * <p>设计注意：
- * <ul>
- * <li>Boss不移动位置，仅原地攻击</li>
- * <li>激活前（isActivated=false）不会进入攻击状态</li>
- * <li>死亡后播放残骸动画（wreck），动画结束后才删除</li>
- * <li>攻击触发使用attackReleased标记，确保每次攻击只触发一次</li>
- * </ul>
- * 
- * @see RoleObj
- */
+//Boss 公共基类，负责距离激活、逻辑帧冷却、唯一攻击释放和延迟移除
 public abstract class AbstractBoss extends RoleObj {
-    /** 当前状态 */
-    protected BossState state=BossState.IDLE;
-    /** 最大生命值，用于血条显示 */
-    protected int maxHealth;
-    /** 攻击冷却时间（未使用，保留字段） */
-    protected long attackCooldownTime;
-    /** 下次攻击时间 */
-    protected long nextAttackTime;
-    /** 当前攻击是否已触发 */
-    protected boolean attackReleased;
-    /** 攻击触发帧（由子类实现） */
-    protected int attackFrame;
-    /** 是否朝右 */
-    protected boolean facingRight=true;
-    /** 是否已激活，玩家到达触发点后设置为true */
-    protected boolean isActivated=false;
+    private static final int WRECK_DISPLAY_FRAMES=40; //残骸持续显示的逻辑帧数
+    protected boolean active; //Boss 是否已经进入战斗状态
+    protected BossState state=BossState.IDLE; //Boss 当前行为状态
+    protected boolean facingRight; //Boss 是否朝向右侧
+    protected int attackCooldownFrames; //剩余攻击冷却逻辑帧数
+    protected boolean attackReleased; //当前攻击动画是否已经释放炮弹
+    protected int activationRange; //玩家触发 Boss 战斗的水平范围
+    protected int attackRange; //Boss 开始攻击的水平范围
+    protected int wreckFrames; //残骸已经显示的逻辑帧数
+    protected int scalePercent; //Boss 素材显示缩放百分比
 
-    /** 供GameLoad通过反射创建模板对象 */
+    //供具体 Boss 的无参构造调用
     protected AbstractBoss() {
     }
 
-    /**
-     * 创建Boss实体
-     * @param x 初始世界横坐标
-     * @param y 初始世界纵坐标
-     * @param icon 初始动画帧图标
-     * @param hp 生命值（同时作为maxHealth）
-     * @param attack 攻击力
-     */
-    protected AbstractBoss(int x, int y, ImageIcon icon, int hp, int attack) {
-        super(x, y, icon.getIconWidth(), icon.getIconHeight(), icon, hp, attack);
-        this.maxHealth=hp;
+    //根据待机首帧自然尺寸创建 Boss 逻辑框
+    protected AbstractBoss(int x,int y,ImageIcon icon,int hp,int attack,
+                           int scalePercent) {
+        super(x,y,scalePixels(getOpaqueBounds(icon).width,scalePercent),
+                scalePixels(getOpaqueBounds(icon).height,scalePercent),
+                icon,hp,attack);
+        this.scalePercent=scalePercent;
     }
 
-    /** 获取空闲动画键 */
+    //获取待机动画键
     protected abstract String getIdleAnimation();
 
-    /** 获取攻击动画键 */
+    //获取攻击动画键
     protected abstract String getAttackAnimation();
 
-    /** 获取残骸动画键（死亡后播放） */
+    //获取残骸图片键
     protected abstract String getWreckAnimation();
 
-    /** 获取空闲动画换帧间隔 */
+    //获取待机动画换帧间隔
     protected abstract int getIdleInterval();
 
-    /** 获取攻击动画换帧间隔 */
+    //获取攻击动画换帧间隔
     protected abstract int getAttackInterval();
 
-    /** 获取攻击触发帧 */
+    //获取唯一炮弹释放帧
     protected abstract int getAttackFrame();
 
-    /** 获取攻击冷却帧数 */
-    protected abstract long getAttackCooldownFrames();
+    //获取攻击结束后的冷却逻辑帧数
+    protected abstract int getAttackCooldownFrames();
 
-    /**
-     * 绘制Boss，使用脚底中心锚点，支持左右翻转
-     * @param g 画笔
-     */
+    //按当前素材自然尺寸和逻辑框脚底中心绘制 Boss
     @Override
     public void showElement(Graphics g) {
-        ImageIcon frame=getIcon();
-        if (frame == null) {
-            return;
-        }
-
-        int drawWidth=frame.getIconWidth();
-        int drawHeight=frame.getIconHeight();
-        int footX=getX() + getW() / 2;
-        int footY=getY() + getH();
-        int drawX=footX - drawWidth / 2;
-        int drawY=footY - drawHeight;
-        Image image=frame.getImage();
-
-        if (facingRight) {
-            g.drawImage(image, drawX + drawWidth, drawY, -drawWidth, drawHeight, null);
-        } else {
-            g.drawImage(image, drawX, drawY, drawWidth, drawHeight, null);
+        if(getIcon()!=null) {
+            drawFootAnchoredFrame(g,getIcon(),scalePercent,facingRight);
         }
     }
 
-    /**
-     * 移动逻辑：Boss不移动，仅更新朝向
-     */
+    //返回当前自然帧以逻辑框脚底中心锚定后的绘制区域
+    protected Rectangle getCurrentDrawBounds() {
+        return getFootAnchoredDrawBounds(getIcon(),scalePercent,facingRight);
+    }
+
+    //查找玩家并在进入激活范围后更新朝向与逻辑帧冷却
     @Override
     protected void move() {
-        if (state == BossState.DEAD) {
+        if(state==BossState.DEAD) {
             return;
         }
-
         ElementObj player=findPlayer();
-        if (player != null) {
-            facingRight=player.getX() > getX();
+        if(player==null) {
+            return;
+        }
+        int distanceX=player.getX()-getX();
+        int absoluteDistanceX=Math.abs(distanceX);
+        if(!active && absoluteDistanceX<=activationRange) {
+            active=true;
+        }
+        if(!active) {
+            return;
+        }
+        facingRight=distanceX>0;
+        if(attackCooldownFrames>0) {
+            attackCooldownFrames--;
+        }
+        if(state==BossState.IDLE && attackCooldownFrames==0
+                && absoluteDistanceX<=attackRange) {
+            state=BossState.ATTACK;
+            attackReleased=false;
         }
     }
 
-    /** 根据当前状态切换动画 */
+    //按当前状态播放待机、攻击动画或显示单帧残骸
     @Override
     protected void updateImage(long gameTime) {
-        switch (state) {
-            case ATTACK_PRIMARY:
-            case ATTACK_SPECIAL:
-                playAnimation(getAttackAnimation(), gameTime, getAttackInterval(), false);
-                break;
-            case DEAD:
-                playAnimation(getWreckAnimation(), gameTime, getAttackInterval(), false);
-                break;
-            default:
-                playAnimation(getIdleAnimation(), gameTime, getIdleInterval(), true);
-                break;
+        if(state==BossState.DEAD) {
+            setIcon(GameLoad.getImages(getWreckAnimation()).get(0));
+        }else if(state==BossState.ATTACK) {
+            playAnimation(getAttackAnimation(),gameTime,getAttackInterval(),false);
+        }else {
+            playAnimation(getIdleAnimation(),gameTime,getIdleInterval(),true);
         }
     }
 
-    /**
-     * 每帧更新逻辑：攻击状态管理、激活检查、死亡检查
-     * @param gameTime 游戏时间
-     */
+    //处理 40 帧残骸、唯一炮弹释放帧和攻击结束后的冷却
     @Override
     protected void add(long gameTime) {
-        if (state == BossState.DEAD) {
-            /** 死亡动画播放结束后删除 */
-            if (isAnimationEnd()) {
+        if(state==BossState.DEAD) {
+            wreckFrames++;
+            if(wreckFrames>=WRECK_DISPLAY_FRAMES) {
                 setLive(false);
             }
             return;
         }
-
-        /** 未激活状态下不进行任何攻击 */
-        if (!isActivated) {
+        if(!active || state!=BossState.ATTACK) {
             return;
         }
-
-        /** 空闲状态且冷却结束时进入攻击状态 */
-        if (state == BossState.IDLE && gameTime >= nextAttackTime) {
-            state=BossState.ATTACK_PRIMARY;
-            attackReleased=false;
+        if(!attackReleased && getImageIndex()==getAttackFrame()) {
+            attackReleased=true;
+            releaseAttack();
         }
-
-        /** 攻击状态下的触发逻辑 */
-        if ((state == BossState.ATTACK_PRIMARY || state == BossState.ATTACK_SPECIAL)) {
-            /** 在攻击触发帧时触发攻击（仅一次） */
-            if (!attackReleased && getImageIndex() == getAttackFrame()) {
-                attackReleased=true;
-            }
-
-            /** 攻击动画结束后进入冷却 */
-            if (isAnimationEnd()) {
-                nextAttackTime=gameTime + getAttackCooldownFrames();
-                attackReleased=false;
-                state=BossState.IDLE;
-            }
+        if(isAnimationEnd()) {
+            attackCooldownFrames=getAttackCooldownFrames();
+            attackReleased=false;
+            state=BossState.IDLE;
         }
     }
 
-    /**
-     * 受伤处理：扣除生命值，生命值为0时进入DEAD状态
-     * @param damage 伤害值
-     */
+    //由具体 Boss 在唯一攻击帧创建成员 B 的 BossShell
+    protected void releaseAttack() {
+    }
+
+    //扣除生命值并进入仍保持存活的残骸显示状态
     @Override
     public void hurt(int damage) {
-        if (state == BossState.DEAD) {
+        if(state==BossState.DEAD) {
             return;
         }
-
-        int currentHp=getHp() - damage;
-        if (currentHp < 0) {
-            currentHp=0;
-        }
-        setHp(currentHp);
-
-        if (currentHp == 0) {
+        setHp(Math.max(0,getHp()-damage));
+        if(getHp()==0) {
             state=BossState.DEAD;
+            attackReleased=false;
+            attackCooldownFrames=0;
+            wreckFrames=0;
         }
     }
 
-    /** 从ElementManager查找第一个存活的玩家 */
+    //从唯一元素管理器中查找第一个仍可战斗的玩家
     protected ElementObj findPlayer() {
-        for (ElementObj player : ElementManager.getManager()
+        for(ElementObj player:ElementManager.getManager()
                 .getElementByKey(GameElement.PLAY)) {
-            if (player.isLive()) {
+            if(player.isLive() && (!(player instanceof RoleObj)
+                    || ((RoleObj)player).getHp()>0)) {
                 return player;
             }
         }
         return null;
     }
 
-    /** 返回贴合Boss身体区域的碰撞框 */
+    //返回贴合 Boss 主体的稳定碰撞框
     @Override
     public Rectangle getRectangle() {
-        return new Rectangle(
-                getX() + (int) (getW() * 0.10),
-                getY() + (int) (getH() * 0.05),
-                (int) (getW() * 0.80),
-                (int) (getH() * 0.90));
+        return new Rectangle(getX()+(int)(getW()*0.10),
+                getY()+(int)(getH()*0.05),(int)(getW()*0.80),
+                (int)(getH()*0.90));
     }
 
-    /** 激活Boss，使其开始攻击 */
-    public void activate() {
-        isActivated=true;
-    }
-
-    /** 是否已激活 */
-    public boolean isActivated() {
-        return isActivated;
-    }
-
-    /** 获取最大生命值，用于血条显示 */
-    public int getMaxHealth() {
-        return maxHealth;
-    }
-
-    /** 获取当前状态 */
-    public BossState getState() {
-        return state;
+    //判断 Boss 是否已经进入战斗
+    public boolean isActive() {
+        return active;
     }
 }
