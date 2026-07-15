@@ -16,6 +16,7 @@ public class Camera {
         //玩家中心点对应窗口左侧四分之一的位置
         x=playerX+playerW/2-width/4;
         int maxX=Math.max(0,worldWidth-width);
+        //限制摄像机不越过地图左右边界
         if(x<0) {
             x=0;
         }

@@ -7,16 +7,7 @@ import java.awt.event.MouseMotionListener;
 
 import cn.edu.scnu.manager.GameLoad;
 
-/**
- * @说明 游戏窗体 主要实现的功能：关闭，显示，最大最小化
- * @功能说明  需要嵌入面板,启动主线程等等
- * @窗体说明 swing awt 窗体大小（记录用户上次使用软件的窗体样式）
- *
- * @分析 1.面板绑定到窗体
- *      2.监听绑定
- *      3.游戏主线程启动
- *      4.显示窗体
- */
+/** 承载游戏面板并管理游戏线程的窗口。 */
 
 public class GameJFrame extends JFrame {
     private JPanel jPanel=null;//正在显示的面板
@@ -29,29 +20,19 @@ public class GameJFrame extends JFrame {
         init();
     }
     private void init() {
-        int width=GameLoad.getInt("window.width");
-        int height=GameLoad.getInt("window.height");
-
-        this.setSize(width,height);
         this.setTitle(GameLoad.getString("window.title"));
         this.setResizable(GameLoad.getBoolean("window.resizable"));
 
-        this.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        this.setLocationRelativeTo(null);
+        this.setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
     }
 
-    /*窗体布局：可以存档、读档*/
-    public void addButton() {
-        //this.setLayout(manager); //布局格式，可以添加控件
-    }
-
-    /**
-     * 启动方法
-     */
+    /** 显示窗口并启动游戏线程。 */
     public void start() {
+        //装配游戏面板
         if(jPanel!=null) {
-            this.add(jPanel);
+            this.setContentPane(jPanel);
         }
+        //绑定键盘和鼠标监听
         if(keyListener!=null) {
             this.addKeyListener(keyListener);
         }
@@ -61,17 +42,22 @@ public class GameJFrame extends JFrame {
         if(mouseMotionListener!=null && jPanel!=null) {
             jPanel.addMouseMotionListener(mouseMotionListener);
         }
+        this.pack();
+        this.setLocationRelativeTo(null);
         this.setVisible(true);
         this.requestFocusInWindow();
+        //启动游戏逻辑线程
         if(thread!=null) {
             thread.start();
         }
+        //单独启动画面刷新线程
         if(jPanel instanceof Runnable) {
-            new Thread((Runnable)jPanel).start();
+            Thread repaintThread=new Thread((Runnable)jPanel,"MetalSlug-Repaint");
+            repaintThread.start();
         }
     }
 
-    //set注入：通过set方法注入配置文件中读取的数据;将配置文件中的数据赋值为类的属性
+    //设置窗口参数
     public void setjPanel(JPanel jPanel) {
         this.jPanel = jPanel;
     }
